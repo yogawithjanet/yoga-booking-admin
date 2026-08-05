@@ -252,6 +252,7 @@ let data = {
 let selectedMemberId = null; // 學員管理：目前展開檢視的學員
 let memberBookings = [];     // 該學員的預約紀錄
 let memberBatches = [];      // 該學員的堂數批次（各自效期）
+let editingBatchId = null;   // 目前正在編輯的堂數批次 id
 let memberSearchQuery = '';
 let memberSortBy = 'default'; // default | credits_desc | credits_asc | name
 let memberStatsCounts = {};   // line_user_id -> 指定區間內的已預約堂數
@@ -260,8 +261,8 @@ function todayISO(offsetDays=0){
   const d = new Date(); d.setDate(d.getDate()+offsetDays);
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
-let statsRangeStart = todayISO(-60);
-let statsRangeEnd = todayISO(0);
+let statsRangeStart = todayISO(0);
+let statsRangeEnd = todayISO(60);
 
 async function loadMemberStats(){
   const { data: rows, error } = await db.from('bookings')
@@ -805,21 +806,100 @@ async function updateNotify(key, val){
 }
 
 /* ================= 學員管理 ================= */
+let expandedBatchMemberId = null; // 目前展開「新增一批堂數」表單的學員
+
+function sortColumn(col){
+  if(memberSortBy === col+'_asc') memberSortBy = col+'_desc';
+  else if(memberSortBy === col+'_desc') memberSortBy = 'default';
+  else memberSortBy = col+'_asc';
+  render();
+}
+function sortArrow(col){
+  if(memberSortBy===col+'_asc') return '<span style="color:var(--sage-dark);">▲</span>';
+  if(memberSortBy===col+'_desc') return '<span style="color:var(--sage-dark);">▼</span>';
+  return '<span style="color:var(--muted);opacity:.5;">↕</span>';
+}
+
+function toggleInlineBatchForm(lineUserId){
+  expandedBatchMemberId = (expandedBatchMemberId===lineUserId) ? null : lineUserId;
+  render();
+}
+function onInlineExpiryTypeChange(val){
+  document.getElementById('ilCbDateField').style.display = val==='date' ? 'flex' : 'none';
+  document.getElementById('ilCbDaysField').style.display = val==='days' ? 'flex' : 'none';
+}
+async function addBatchInline(lineUserId){
+  const amount = Number(document.getElementById('ilCbAmount').value);
+  if(!amount || amount<=0){ showToast('請輸入正確的堂數'); return; }
+  const expiryType = document.getElementById('ilCbExpiryType').value;
+
+  let expiresAt = null;
+  if(expiryType==='date'){
+    const val = document.getElementById('ilCbExpiryDate').value;
+    if(!val){ showToast('請選擇到期日'); return; }
+    expiresAt = val;
+  } else if(expiryType==='days'){
+    const days = Number(document.getElementById('ilCbExpiryDays').value);
+    if(!days || days<=0){ showToast('請輸入正確的天數'); return; }
+    expiresAt = todayISO(days);
+  }
+
+  await addCreditsToBatch(lineUserId, amount, expiresAt);
+  const m = data.members.find(x=>x.line_user_id===lineUserId);
+  const newRemaining = (m ? m.remaining_credits : 0) + amount;
+  const newTotal = (m ? m.total_credits : 0) + amount;
+  await db.from('members').update({ remaining_credits: newRemaining, total_credits: newTotal }).eq('line_user_id', lineUserId);
+  if(m){ m.remaining_credits = newRemaining; m.total_credits = newTotal; }
+
+  expandedBatchMemberId = null;
+  render();
+  showToast(`已新增 ${amount} 堂${expiresAt ? '，效期至 '+expiresAt : '（永久有效）'}`);
+}
+
 function pageMembers(){
   if(selectedMemberId) return pageMemberDetail();
 
   let list = data.members.filter(m =>
     !memberSearchQuery || (m.display_name||'').toLowerCase().includes(memberSearchQuery.toLowerCase())
   );
-  if(memberSortBy==='credits_desc') list = [...list].sort((a,b)=>b.remaining_credits-a.remaining_credits);
+  if(memberSortBy==='name_asc') list = [...list].sort((a,b)=>(a.display_name||'').localeCompare(b.display_name||''));
+  else if(memberSortBy==='name_desc') list = [...list].sort((a,b)=>(b.display_name||'').localeCompare(a.display_name||''));
   else if(memberSortBy==='credits_asc') list = [...list].sort((a,b)=>a.remaining_credits-b.remaining_credits);
-  else if(memberSortBy==='name') list = [...list].sort((a,b)=>(a.display_name||'').localeCompare(b.display_name||''));
+  else if(memberSortBy==='credits_desc') list = [...list].sort((a,b)=>b.remaining_credits-a.remaining_credits);
+  else if(memberSortBy==='recent_asc') list = [...list].sort((a,b)=>(memberStatsCounts[a.line_user_id]||0)-(memberStatsCounts[b.line_user_id]||0));
+  else if(memberSortBy==='recent_desc') list = [...list].sort((a,b)=>(memberStatsCounts[b.line_user_id]||0)-(memberStatsCounts[a.line_user_id]||0));
 
   const rows = list.map(m=>{
     const avatar = m.picture_url
       ? `<img src="${m.picture_url}" class="avatar-sm" style="object-fit:cover;">`
       : `<span class="avatar-sm">${(m.display_name||'?')[0]}</span>`;
     const recentCount = memberStatsCounts[m.line_user_id] || 0;
+    const isExpanded = expandedBatchMemberId === m.line_user_id;
+
+    const inlineForm = !isExpanded ? '' : `
+    <tr>
+      <td colspan="4" style="background:var(--paper);">
+        <div style="padding:12px 6px;">
+          <div class="form-grid">
+            <div class="field"><label>堂數</label><input id="ilCbAmount" type="number" value="10" min="1"></div>
+            <div class="field"><label>效期方式</label>
+              <select id="ilCbExpiryType" onchange="onInlineExpiryTypeChange(this.value)">
+                <option value="none">不設效期（永久有效）</option>
+                <option value="date">指定到期日</option>
+                <option value="days">幾天後到期</option>
+              </select>
+            </div>
+            <div class="field" id="ilCbDateField" style="display:none;"><label>到期日</label><input id="ilCbExpiryDate" type="date"></div>
+            <div class="field" id="ilCbDaysField" style="display:none;"><label>幾天後到期</label><input id="ilCbExpiryDays" type="number" value="30" min="1"></div>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:10px;justify-content:flex-end;">
+            <button class="btn btn-ghost btn-sm" onclick="toggleInlineBatchForm('${m.line_user_id}')">取消</button>
+            <button class="btn btn-primary btn-sm" onclick="addBatchInline('${m.line_user_id}')">確認新增這批堂數</button>
+          </div>
+        </div>
+      </td>
+    </tr>`;
+
     return `
     <tr>
       <td>${avatar}${m.display_name||'（尚未取得姓名）'}</td>
@@ -830,23 +910,24 @@ function pageMembers(){
           <button class="btn btn-ghost btn-sm" onclick="openMemberDetail('${m.line_user_id}')">查看／管理</button>
           <button class="btn btn-ghost btn-sm" onclick="adjustMember('${m.line_user_id}', 1)">＋1</button>
           <button class="btn btn-ghost btn-sm" onclick="adjustMember('${m.line_user_id}', -1)">－1</button>
+          <button class="btn btn-primary btn-sm" onclick="toggleInlineBatchForm('${m.line_user_id}')">${isExpanded?'收起':'＋加一批'}</button>
           <input type="number" id="setCredits-${m.line_user_id}" placeholder="輸入數字" style="width:70px;border:1px solid var(--line);border-radius:8px;padding:5px 8px;font-size:12.5px;">
           <button class="btn btn-primary btn-sm" onclick="setMemberCredits('${m.line_user_id}')">設定</button>
         </div>
       </td>
-    </tr>`;
+    </tr>${inlineForm}`;
   }).join('');
 
   return `
     <div class="page-title">學員管理</div>
-    <div class="page-sub">學員會在<b>第一次透過 LINE 打開預約頁面後</b>自動出現在這份名單裡，你不需要手動新增。點「查看／管理」可以看到選課歷史、新增有效期限的堂數批次、幫學員手動加課或取消課程。</div>
+    <div class="page-sub">學員會在<b>第一次透過 LINE 打開預約頁面後</b>自動出現在這份名單裡，你不需要手動新增。點「查看／管理」可以看到選課歷史、堂數批次明細；點「＋加一批」可以直接在這裡幫學員新增一批有效期限的堂數。</div>
 
     <div class="panel">
       <div class="panel-head"><h3>近期預約堂數統計</h3></div>
       <div class="panel-body">
         <div class="desc" style="margin-bottom:10px;">計算每位學員在指定日期區間內，總共預約了幾堂課（不含已取消的）。下方學員列表的「近期預約」欄位會依這個區間更新。</div>
         <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:end;">
-          <div class="field" style="width:auto;"><label>快速設定：最近幾個月</label>
+          <div class="field" style="width:auto;"><label>快速設定：未來幾個月</label>
             <div style="display:flex;gap:6px;">
               <input type="number" id="statsMonthsInput" value="${statsMonths}" style="width:70px;border:1px solid var(--line);border-radius:8px;padding:7px 10px;font-size:13px;">
               <button class="btn btn-ghost btn-sm" onclick="applyStatsMonths()">套用</button>
@@ -861,33 +942,31 @@ function pageMembers(){
 
     <div class="panel">
       <div class="panel-head"><h3>學員列表</h3></div>
-      <div class="panel-body" style="display:flex;gap:10px;flex-wrap:wrap;">
-        <input type="text" placeholder="搜尋姓名..." value="${memberSearchQuery}" oninput="onMemberSearch(this.value)" style="flex:1;min-width:160px;border:1px solid var(--line);border-radius:8px;padding:8px 12px;font-size:13px;">
-        <select onchange="onMemberSort(this.value)" style="border:1px solid var(--line);border-radius:8px;padding:8px 12px;font-size:13px;">
-          <option value="default" ${memberSortBy==='default'?'selected':''}>預設排序（最近更新優先）</option>
-          <option value="credits_desc" ${memberSortBy==='credits_desc'?'selected':''}>剩餘堂數：高到低</option>
-          <option value="credits_asc" ${memberSortBy==='credits_asc'?'selected':''}>剩餘堂數：低到高</option>
-          <option value="name" ${memberSortBy==='name'?'selected':''}>姓名排序</option>
-        </select>
+      <div class="panel-body">
+        <input type="text" placeholder="搜尋姓名..." value="${memberSearchQuery}" oninput="onMemberSearch(this.value)" style="width:100%;border:1px solid var(--line);border-radius:8px;padding:8px 12px;font-size:13px;">
       </div>
       <div class="panel-body pad0">
-        <table><thead><tr><th>學員</th><th>剩餘堂數</th><th>近期預約</th><th></th></tr></thead>
+        <table><thead><tr>
+          <th style="cursor:pointer;user-select:none;" onclick="sortColumn('name')">學員 ${sortArrow('name')}</th>
+          <th style="cursor:pointer;user-select:none;" onclick="sortColumn('credits')">剩餘堂數 ${sortArrow('credits')}</th>
+          <th style="cursor:pointer;user-select:none;" onclick="sortColumn('recent')">近期預約 ${sortArrow('recent')}</th>
+          <th></th>
+        </tr></thead>
         <tbody>${rows || '<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:20px;">找不到符合的學員</td></tr>'}</tbody></table>
       </div>
     </div>`;
 }
 
 function onMemberSearch(val){ memberSearchQuery = val; render(); }
-function onMemberSort(val){ memberSortBy = val; render(); }
 
 async function applyStatsMonths(){
   const months = Number(document.getElementById('statsMonthsInput').value) || 1;
   statsMonths = months;
-  statsRangeEnd = todayISO(0);
-  statsRangeStart = todayISO(-months*30);
+  statsRangeStart = todayISO(0);
+  statsRangeEnd = todayISO(months*30);
   await loadMemberStats();
   render();
-  showToast(`已套用最近 ${months} 個月的統計`);
+  showToast(`已套用未來 ${months} 個月的統計`);
 }
 async function applyStatsRange(){
   const start = document.getElementById('statsStart').value;
@@ -924,6 +1003,34 @@ async function loadMemberBatches(lineUserId){
   const { data, error } = await db.from('credit_batches')
     .select('*').eq('line_user_id', lineUserId).order('expires_at', { ascending:true, nullsFirst:false });
   memberBatches = (!error && data) ? data : [];
+}
+
+function startEditBatch(batchId){ editingBatchId = batchId; render(); }
+function cancelEditBatch(){ editingBatchId = null; render(); }
+
+async function saveEditBatch(batchId, lineUserId){
+  const newRemaining = Number(document.getElementById(`ebRemaining-${batchId}`).value);
+  const newExpiry = document.getElementById(`ebExpiry-${batchId}`).value || null;
+  if(isNaN(newRemaining) || newRemaining<0){ showToast('請輸入正確的剩餘堂數'); return; }
+
+  const batch = memberBatches.find(b=>b.id===batchId);
+  if(!batch) return;
+  const delta = newRemaining - batch.remaining; // 改動的差額，要同步反映到會員的剩餘堂數
+
+  const { error } = await db.from('credit_batches').update({ remaining:newRemaining, expires_at:newExpiry }).eq('id', batchId);
+  if(error){ showToast('更新失敗'); console.error(error); return; }
+
+  if(delta !== 0){
+    const m = data.members.find(x=>x.line_user_id===lineUserId);
+    const newMemberRemaining = Math.max(0, (m ? m.remaining_credits : 0) + delta);
+    await db.from('members').update({ remaining_credits:newMemberRemaining }).eq('line_user_id', lineUserId);
+    if(m) m.remaining_credits = newMemberRemaining;
+  }
+
+  editingBatchId = null;
+  await loadMemberBatches(lineUserId);
+  render();
+  showToast('已更新這批堂數');
 }
 
 async function setMemberCredits(lineUserId){
@@ -983,6 +1090,7 @@ async function addBatchForMember(lineUserId){
 
 async function openMemberDetail(lineUserId){
   selectedMemberId = lineUserId;
+  editingBatchId = null;
   const [bookingsRes] = await Promise.all([
     db.from('bookings').select('*').eq('line_user_id', lineUserId).order('created_at', {ascending:false}),
     loadDayOverrides(),
@@ -991,7 +1099,7 @@ async function openMemberDetail(lineUserId){
   memberBookings = bookingsRes.data || [];
   render();
 }
-function backToMemberList(){ selectedMemberId = null; memberBookings = []; memberBatches = []; render(); }
+function backToMemberList(){ selectedMemberId = null; memberBookings = []; memberBatches = []; editingBatchId = null; render(); }
 
 function pageMemberDetail(){
   const m = data.members.find(x=>x.line_user_id===selectedMemberId);
@@ -1048,19 +1156,33 @@ function pageMemberDetail(){
     <div class="panel">
       <div class="panel-head"><h3>目前的堂數批次</h3></div>
       <div class="panel-body pad0">
-        <table><thead><tr><th>加入時間</th><th>原始堂數</th><th>剩餘</th><th>效期</th></tr></thead>
+        <table><thead><tr><th>加入時間</th><th>原始堂數</th><th>剩餘</th><th>效期</th><th></th></tr></thead>
         <tbody>${memberBatches.map(b=>{
           const isExpired = b.expires_at && b.expires_at < todayISO(0);
           const expiryLabel = b.expires_at
             ? (isExpired ? `<span style="color:var(--danger);">已過期（${b.expires_at}）</span>` : b.expires_at)
             : '永久有效';
+          const isEditing = editingBatchId === b.id;
+          if(isEditing){
+            return `<tr>
+              <td colspan="5">
+                <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:end;padding:8px 0;">
+                  <div class="field" style="width:auto;"><label>剩餘堂數</label><input id="ebRemaining-${b.id}" type="number" value="${b.remaining}" min="0" style="width:90px;"></div>
+                  <div class="field" style="width:auto;"><label>效期（留空＝永久有效）</label><input id="ebExpiry-${b.id}" type="date" value="${b.expires_at||''}"></div>
+                  <button class="btn btn-ghost btn-sm" onclick="cancelEditBatch()">取消</button>
+                  <button class="btn btn-primary btn-sm" onclick="saveEditBatch('${b.id}','${m.line_user_id}')">儲存</button>
+                </div>
+              </td>
+            </tr>`;
+          }
           return `<tr style="${b.remaining<=0?'opacity:.45;':''}">
             <td>${new Date(b.created_at).toLocaleDateString('zh-TW')}</td>
             <td>${b.amount} 堂</td>
             <td><b>${b.remaining}</b> 堂</td>
             <td>${expiryLabel}</td>
+            <td><button class="btn btn-ghost btn-sm" onclick="startEditBatch('${b.id}')">編輯</button></td>
           </tr>`;
-        }).join('') || '<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:16px;">目前沒有任何堂數批次紀錄</td></tr>'}</tbody></table>
+        }).join('') || '<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:16px;">目前沒有任何堂數批次紀錄</td></tr>'}</tbody></table>
       </div>
     </div>
 
