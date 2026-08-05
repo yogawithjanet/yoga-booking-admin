@@ -1,0 +1,1402 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>瑜珈團課預約系統｜後台管理</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<style>
+  :root{
+    --ink:#26251f;
+    --sage:#5f7a5a;
+    --sage-light:#eaf0e6;
+    --sage-dark:#3f5a3c;
+    --clay:#c98a5e;
+    --clay-light:#f7e9dd;
+    --paper:#f7f6f2;
+    --card:#ffffff;
+    --line:#e6e3da;
+    --muted:#8c8878;
+    --danger:#c1503a;
+    --danger-light:#f7e2dc;
+    font-family:"Noto Sans TC","PingFang TC","Microsoft JhengHei",sans-serif;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--paper);color:var(--ink);}
+  #app{display:flex;min-height:100vh;}
+
+  /* ---- Sidebar ---- */
+  .sidebar{
+    width:220px;flex-shrink:0;background:var(--sage-dark);color:#fff;
+    padding:22px 0;display:flex;flex-direction:column;
+  }
+  .brand{padding:0 22px 22px;font-weight:800;font-size:16px;letter-spacing:.5px;border-bottom:1px solid rgba(255,255,255,.12);margin-bottom:14px;}
+  .brand span{display:block;font-weight:400;font-size:11.5px;opacity:.65;margin-top:3px;letter-spacing:1px;}
+  .nav-item{
+    display:flex;align-items:center;gap:10px;
+    padding:11px 22px;font-size:13.5px;font-weight:500;
+    color:rgba(255,255,255,.75);cursor:pointer;border-left:3px solid transparent;
+  }
+  .nav-item .ic{width:18px;text-align:center;}
+  .nav-item:hover{background:rgba(255,255,255,.06);}
+  .nav-item.active{background:rgba(255,255,255,.1);color:#fff;border-left-color:var(--clay);}
+
+  /* ---- Main ---- */
+  .main{flex:1;padding:30px 36px;max-width:920px;}
+  .page-title{font-size:20px;font-weight:800;margin:0 0 4px;}
+  .page-sub{font-size:13px;color:var(--muted);margin:0 0 24px;line-height:1.6;}
+
+  .panel{background:var(--card);border:1px solid var(--line);border-radius:14px;margin-bottom:18px;overflow:hidden;}
+  .panel-head{
+    display:flex;justify-content:space-between;align-items:center;
+    padding:14px 18px;border-bottom:1px solid var(--line);
+  }
+  .panel-head h3{margin:0;font-size:14.5px;font-weight:700;}
+  .panel-body{padding:16px 18px;}
+  .panel-body.pad0{padding:0;}
+
+  .btn{
+    border:none;border-radius:9px;padding:8px 14px;font-size:12.5px;font-weight:700;
+    cursor:pointer;display:inline-flex;align-items:center;gap:5px;
+  }
+  .btn-primary{background:var(--sage);color:#fff;}
+  .btn-primary:hover{background:var(--sage-dark);}
+  .btn-ghost{background:var(--sage-light);color:var(--sage-dark);}
+  .btn-danger{background:var(--danger-light);color:var(--danger);}
+  .btn-sm{padding:5px 10px;font-size:11.5px;border-radius:7px;}
+
+  table{width:100%;border-collapse:collapse;font-size:13px;}
+  thead th{
+    text-align:left;font-size:11px;color:var(--muted);letter-spacing:.5px;
+    padding:9px 18px;background:var(--paper);border-bottom:1px solid var(--line);font-weight:700;
+  }
+  tbody td{padding:11px 18px;border-bottom:1px solid var(--line);vertical-align:middle;}
+  tbody tr:last-child td{border-bottom:none;}
+  .tag{display:inline-block;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:600;}
+  .tag.on{background:var(--sage-light);color:var(--sage-dark);}
+  .tag.off{background:#f1efe8;color:var(--muted);}
+  .row-actions{display:flex;gap:6px;justify-content:flex-end;}
+  .avatar-sm{width:26px;height:26px;border-radius:50%;background:linear-gradient(135deg,var(--sage),var(--clay));display:inline-flex;align-items:center;justify-content:center;color:#fff;font-size:11px;font-weight:700;margin-right:8px;}
+
+  .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+  .form-grid.full{grid-template-columns:1fr;}
+  .field{display:flex;flex-direction:column;gap:5px;}
+  .field label{font-size:12px;color:var(--muted);font-weight:600;}
+  .field input, .field select, .field textarea{
+    border:1px solid var(--line);border-radius:9px;padding:9px 11px;
+    font-size:13px;font-family:inherit;background:var(--paper);color:var(--ink);
+  }
+  .field textarea{resize:vertical;min-height:70px;}
+  .weekday-picker{display:flex;gap:6px;flex-wrap:wrap;}
+  .wd-chip{
+    padding:7px 0;width:38px;text-align:center;border-radius:8px;font-size:12px;
+    background:var(--paper);border:1px solid var(--line);cursor:pointer;color:var(--muted);font-weight:600;
+  }
+  .wd-chip.on{background:var(--sage);color:#fff;border-color:var(--sage);}
+
+  .add-bar{display:flex;justify-content:flex-end;padding:12px 18px;border-top:1px solid var(--line);background:var(--paper);}
+
+  .toggle{
+    position:relative;width:38px;height:22px;background:#e0ddd1;border-radius:20px;cursor:pointer;flex-shrink:0;
+  }
+  .toggle.on{background:var(--sage);}
+  .toggle .knob{
+    position:absolute;top:2px;left:2px;width:18px;height:18px;background:#fff;border-radius:50%;
+    transition:left .15s;box-shadow:0 1px 2px rgba(0,0,0,.2);
+  }
+  .toggle.on .knob{left:18px;}
+
+  .settings-row{display:flex;justify-content:space-between;align-items:center;padding:13px 0;border-bottom:1px solid var(--line);gap:16px;}
+  .settings-row:last-child{border-bottom:none;}
+  .settings-row .label{font-size:13.5px;font-weight:600;}
+  .settings-row .desc{font-size:12px;color:var(--muted);margin-top:2px;line-height:1.5;}
+
+  .msg-template{
+    background:var(--paper);border:1px dashed var(--line);border-radius:10px;
+    padding:12px 14px;font-size:12.5px;color:var(--ink);line-height:1.7;white-space:pre-wrap;
+  }
+  .var-tag{display:inline-block;background:var(--clay-light);color:#8a5a35;padding:1px 6px;border-radius:5px;font-size:11px;font-family:monospace;}
+
+  .stat-cards{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px;}
+  .stat-card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px;}
+  .stat-card .num{font-size:22px;font-weight:800;color:var(--sage-dark);}
+  .stat-card .lbl{font-size:11.5px;color:var(--muted);margin-top:2px;}
+
+  .hint-box{
+    display:flex;gap:9px;background:var(--clay-light);border:1px solid #eeceb6;
+    border-radius:10px;padding:10px 13px;font-size:12px;color:#8a5a35;line-height:1.6;margin-bottom:18px;
+  }
+  .toast{
+    position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(20px);
+    background:var(--ink);color:#fff;padding:11px 20px;border-radius:30px;font-size:13px;
+    opacity:0;transition:all .3s ease;pointer-events:none;z-index:50;
+  }
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+
+  /* ---- 登入畫面 ---- */
+  #loginScreen{
+    position:fixed;inset:0;background:var(--sage-dark);
+    display:flex;align-items:center;justify-content:center;z-index:100;
+  }
+  .login-box{
+    background:#fff;border-radius:18px;padding:34px 30px;width:100%;max-width:320px;
+    box-shadow:0 10px 30px rgba(0,0,0,.2);
+  }
+  .login-box .lock-ic{font-size:26px;margin-bottom:6px;}
+  .login-box h2{margin:0 0 4px;font-size:18px;}
+  .login-box p{margin:0 0 20px;font-size:12.5px;color:var(--muted);line-height:1.6;}
+  .login-box input{
+    width:100%;border:1px solid var(--line);border-radius:10px;padding:11px 13px;
+    font-size:14px;font-family:inherit;margin-bottom:10px;background:var(--paper);color:var(--ink);
+  }
+  .login-box .btn-primary{width:100%;justify-content:center;padding:11px;font-size:13.5px;border-radius:10px;}
+  .login-err{color:var(--danger);font-size:12px;margin:-4px 0 10px;min-height:14px;}
+  .sidebar-bottom{margin-top:auto;padding:14px 22px 0;border-top:1px solid rgba(255,255,255,.12);}
+  .logout-link{color:rgba(255,255,255,.65);font-size:12.5px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;}
+  .logout-link:hover{color:#fff;}
+</style>
+</head>
+<body>
+<div id="loginScreen">
+  <div class="login-box" id="loginBox">
+    <div class="lock-ic">🔒</div>
+    <h2>後台管理登入</h2>
+    <p>此頁面僅供店家／管理員使用，請輸入管理密碼。</p>
+    <input type="password" id="loginPassword" placeholder="請輸入密碼" onkeydown="if(event.key==='Enter') tryLogin()">
+    <div class="login-err" id="loginErr"></div>
+    <button class="btn btn-primary" onclick="tryLogin()">登入</button>
+    <div style="text-align:center;margin-top:12px;">
+      <span style="font-size:12.5px;color:var(--muted);cursor:pointer;text-decoration:underline;" onclick="showForgotBox()">忘記密碼？</span>
+    </div>
+  </div>
+
+  <div class="login-box" id="forgotBox" style="display:none;">
+    <div class="lock-ic">🔑</div>
+    <h2>重設密碼</h2>
+    <div id="forgotStep1">
+      <p id="securityQuestionText">安全問題載入中...</p>
+      <input type="text" id="securityAnswerInput" placeholder="請輸入答案">
+      <div class="login-err" id="forgotErr1"></div>
+      <button class="btn btn-primary" onclick="verifySecurityAnswer()">驗證答案</button>
+    </div>
+    <div id="forgotStep2" style="display:none;">
+      <p>驗證成功，請設定新密碼。</p>
+      <input type="password" id="newPwInput" placeholder="新密碼（至少 6 碼）">
+      <input type="password" id="newPwInput2" placeholder="再次輸入新密碼">
+      <div class="login-err" id="forgotErr2"></div>
+      <button class="btn btn-primary" onclick="resetPasswordViaForgot()">確認重設</button>
+    </div>
+    <div style="text-align:center;margin-top:12px;">
+      <span style="font-size:12.5px;color:var(--muted);cursor:pointer;text-decoration:underline;" onclick="showLoginBox()">返回登入</span>
+    </div>
+  </div>
+</div>
+
+<div id="app" style="display:none;">
+  <div class="sidebar">
+    <div class="brand" id="sidebarBrand">瑜珈時光<span>後台管理系統</span></div>
+    <div class="nav-item active" data-page="overview"><span class="ic">📊</span>總覽</div>
+    <div class="nav-item" data-page="store"><span class="ic">🏠</span>店家設定</div>
+    <div class="nav-item" data-page="classes"><span class="ic">🗓️</span>課程設定</div>
+    <div class="nav-item" data-page="roster"><span class="ic">📋</span>每日名單</div>
+    <div class="nav-item" data-page="teacherlog"><span class="ic">📈</span>老師教學紀錄</div>
+    <div class="nav-item" data-page="teachers"><span class="ic">🧑‍🏫</span>老師管理</div>
+    <div class="nav-item" data-page="notify"><span class="ic">🔔</span>通知設定</div>
+    <div class="nav-item" data-page="members"><span class="ic">👥</span>學員管理</div>
+    <div class="sidebar-bottom"><span class="logout-link" onclick="logout()">🚪 登出</span></div>
+  </div>
+
+  <div class="main" id="mainArea"></div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ============ Supabase 連線設定（跟前台用同一組） ============ */
+const SUPABASE_URL = 'https://zlopmhgwjeocuzopaoaa.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inpsb3BtaGd3amVvY3V6b3Bhb2FhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU2NjUxOTEsImV4cCI6MjEwMTI0MTE5MX0.UETCS69VOW2-gXgIBBkz2OJGjMQsO97L050wE_2Z3S8';
+const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+/* ============ 外觀主題（跟前台共用同一套色票） ============ */
+const THEMES = {
+  sage:      { name:'鼠尾草綠', sage:'#5f7a5a', sageLight:'#eaf0e6', sageDark:'#3f5a3c', clay:'#c98a5e', clayLight:'#f7e9dd' },
+  ocean:     { name:'海洋藍',   sage:'#4a7590', sageLight:'#e8f1f5', sageDark:'#2c4a5c', clay:'#d9a05b', clayLight:'#faf0e0' },
+  lavender:  { name:'薰衣草紫', sage:'#7c6a99', sageLight:'#f0ecf7', sageDark:'#4f3f6b', clay:'#d98fa0', clayLight:'#fbe9ed' },
+  sunset:    { name:'夕陽橘',   sage:'#b06a3f', sageLight:'#fbeee3', sageDark:'#7a4223', clay:'#e0a15c', clayLight:'#fdf1de' },
+  forest:    { name:'深林綠',   sage:'#40593f', sageLight:'#e6ede6', sageDark:'#263a26', clay:'#8a7048', clayLight:'#f0e8d8' },
+  rose:      { name:'玫瑰豆沙', sage:'#8f6870', sageLight:'#f5eced', sageDark:'#5c3a40', clay:'#c99a8a', clayLight:'#f7ede6' },
+  slate:     { name:'石墨灰',   sage:'#565f6a', sageLight:'#eef0f2', sageDark:'#33373d', clay:'#8f8a7d', clayLight:'#f2efe8' }
+};
+function applyTheme(themeName){
+  const t = THEMES[themeName] || THEMES.sage;
+  const root = document.documentElement.style;
+  root.setProperty('--sage', t.sage);
+  root.setProperty('--sage-light', t.sageLight);
+  root.setProperty('--sage-dark', t.sageDark);
+  root.setProperty('--clay', t.clay);
+  root.setProperty('--clay-light', t.clayLight);
+}
+
+let data = {
+  store: { name:'瑜珈時光', line_oa:'', greeting:'', admin_password:'yoga1234', security_question:'', security_answer:'', theme:'sage' },
+  classes: [],   // class_templates
+  teachers: [],
+  members: [],
+  notify: {
+    reminder_enabled:true, reminder_time:'18:00', reminder_template:'',
+    low_credit_enabled:true, low_credit_threshold:2,
+    cancel_deadline_minutes:60, booking_window_days:30,
+    booking_open_start:null, booking_open_end:null
+  }
+};
+let selectedMemberId = null; // 學員管理：目前展開檢視的學員
+let memberBookings = [];     // 該學員的預約紀錄
+let memberBatches = [];      // 該學員的堂數批次（各自效期）
+let memberSearchQuery = '';
+let memberSortBy = 'default'; // default | credits_desc | credits_asc | name
+let memberStatsCounts = {};   // line_user_id -> 指定區間內的已預約堂數
+let statsMonths = 2;
+function todayISO(offsetDays=0){
+  const d = new Date(); d.setDate(d.getDate()+offsetDays);
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+let statsRangeStart = todayISO(-60);
+let statsRangeEnd = todayISO(0);
+
+async function loadMemberStats(){
+  const { data: rows, error } = await db.from('bookings')
+    .select('line_user_id')
+    .eq('status', 'active')
+    .gte('class_date_iso', statsRangeStart)
+    .lte('class_date_iso', statsRangeEnd);
+  memberStatsCounts = {};
+  if(!error && rows){
+    rows.forEach(r=>{ memberStatsCounts[r.line_user_id] = (memberStatsCounts[r.line_user_id]||0) + 1; });
+  }
+}
+
+async function loadAdminState(){
+  const [storeRes, classesRes, teachersRes, notifyRes, membersRes] = await Promise.all([
+    db.from('store_settings').select('*').eq('id',1).single(),
+    db.from('class_templates').select('*').order('time'),
+    db.from('teachers').select('*').order('created_at'),
+    db.from('notify_settings').select('*').eq('id',1).single(),
+    db.from('members').select('*').order('updated_at', {ascending:false})
+  ]);
+  if(storeRes.data) data.store = storeRes.data;
+  if(classesRes.data) data.classes = classesRes.data;
+  if(teachersRes.data) data.teachers = teachersRes.data;
+  if(notifyRes.data) data.notify = notifyRes.data;
+  if(membersRes.data) data.members = membersRes.data;
+  await loadDayOverrides(); // 一併載入單日停課/加開特別課，讓學員管理等頁面也能用到
+}
+
+function memberName(lineUserId){
+  const m = data.members.find(x=>x.line_user_id===lineUserId);
+  return (m && m.display_name) || '（未知學員）';
+}
+
+/* 日期輔助：把 YYYY-MM-DD 轉成跟前台一致、不補零的 dateKey，例如 2026-8-5 */
+function isoToDateKey(isoStr){
+  const [y,m,d] = isoStr.split('-').map(Number);
+  return `${y}-${m}-${d}`;
+}
+function dateKeyToLabel(isoStr){
+  const [y,m,d] = isoStr.split('-').map(Number);
+  const wd = ['日','一','二','三','四','五','六'][new Date(y,m-1,d).getDay()];
+  return `${m}/${d} (週${wd})`;
+}
+function weekdayLabelOf(isoStr){
+  const [y,m,d] = isoStr.split('-').map(Number);
+  return ['日','一','二','三','四','五','六'][new Date(y,m-1,d).getDay()];
+}
+
+function showToast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'), 2000);
+}
+
+let currentPage = 'overview';
+const WEEKDAYS = ['一','二','三','四','五','六','日'];
+
+/* ================= 總覽 ================= */
+function pageOverview(){
+  const activeClasses = data.classes.filter(c=>c.active).length;
+  return `
+    <div class="page-title">總覽</div>
+    <div class="page-sub">這裡是後台管理員（老師／店家）看到的畫面，資料會即時同步到學生端的 LINE 介面。</div>
+    <div class="stat-cards">
+      <div class="stat-card"><div class="num">${activeClasses}</div><div class="lbl">上架中課程範本</div></div>
+      <div class="stat-card"><div class="num">${data.teachers.length}</div><div class="lbl">授課老師</div></div>
+      <div class="stat-card"><div class="num">${data.notify.reminder_enabled?'已開啟':'已關閉'}</div><div class="lbl">課前提醒通知</div></div>
+      <div class="stat-card"><div class="num">${data.members.length}</div><div class="lbl">已加入學員</div></div>
+    </div>
+    <div class="hint-box">💡 沒有串接金流，所以不需要「線上購買方案」。學生的堂數改由<b>老師／管理員在「學員管理」手動增加</b>（例如收現金、轉帳後手動加堂），系統只負責預約時自動扣堂、取消時自動退堂。</div>
+    <div class="panel">
+      <div class="panel-head"><h3>後台可以設定的項目</h3></div>
+      <div class="panel-body">
+        <div class="settings-row"><div><div class="label">🗓️ 課程設定</div><div class="desc">設定固定的每週課表：課程名稱、老師、時間、上課星期、可預約人數，系統會依此自動產生未來每天的可預約課程；也可以在這裡設定開放預約的時間區間。</div></div></div>
+        <div class="settings-row"><div><div class="label">🧑‍🏫 老師管理</div><div class="desc">新增／編輯授課老師資料，會顯示在學生端的課程卡片上。</div></div></div>
+        <div class="settings-row"><div><div class="label">🔔 通知設定</div><div class="desc">設定課前提醒發送時間與訊息內容、堂數不足提醒、取消預約時限等自動化規則。</div></div></div>
+        <div class="settings-row"><div><div class="label">👥 學員管理</div><div class="desc">查看每位學生目前剩餘堂數、預約紀錄，並可手動增減堂數（收費後手動加堂）。</div></div></div>
+      </div>
+    </div>`;
+}
+
+/* ================= 課程設定 ================= */
+let editingClassId = null;
+let dayOverrides = []; // 單日停課/加課的例外清單
+let dayOverrideDate = new Date().toISOString().slice(0,10);
+
+async function loadDayOverrides(){
+  const { data: rows, error } = await db.from('class_overrides').select('*').order('date');
+  dayOverrides = (!error && rows) ? rows : [];
+}
+
+function pageClasses(){
+  const n = data.notify;
+  const rows = data.classes.map(c=>`
+    <tr>
+      <td><b>${c.title}</b></td>
+      <td>${c.teacher}</td>
+      <td>${c.time}（${c.duration}分）</td>
+      <td>${(c.weekdays||[]).join('、')}</td>
+      <td>${c.cap} 人</td>
+      <td>
+        <div class="row-actions">
+          <button class="btn btn-ghost btn-sm" onclick="startEditClass('${c.id}')">編輯</button>
+          <button class="btn btn-danger btn-sm" onclick="removeClass('${c.id}')">刪除</button>
+        </div>
+      </td>
+    </tr>`).join('');
+
+  const editing = editingClassId ? data.classes.find(c=>c.id===editingClassId) : null;
+  const selectedDays = editing ? (editing.weekdays||[]) : [];
+
+  const cancelOverrides = dayOverrides.filter(o=>o.type==='cancel');
+  const extraOverrides = dayOverrides.filter(o=>o.type==='extra');
+
+  return `
+    <div class="page-title">課程設定</div>
+    <div class="page-sub">設定「每週固定課表」，系統會依照這裡的星期設定，自動產生課表給學生選；也可以在下方控制學生什麼時候能開始預約，或針對單一天調整課程。</div>
+    <div class="hint-box">💡 例如「哈達瑜珈」設定為每週二、四、六 10:30，系統就會自動在接下來每個週二/四/六產生一堂可預約課程，不用每天手動新增。</div>
+
+    <div class="panel">
+      <div class="panel-head"><h3>目前課程範本</h3></div>
+      <div class="panel-body pad0">
+        <table>
+          <thead><tr><th>課程名稱</th><th>授課老師</th><th>時段</th><th>上課星期</th><th>容納人數</th><th></th></tr></thead>
+          <tbody>${rows || '<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:20px;">尚無課程範本</td></tr>'}</tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="panel" id="classFormPanel">
+      <div class="panel-head"><h3>${editing ? '編輯課程範本' : '新增課程範本'}</h3></div>
+      <div class="panel-body">
+        <div class="form-grid">
+          <div class="field"><label>課程名稱</label><input id="ncTitle" placeholder="例如：晨間伸展" value="${editing ? editing.title : ''}"></div>
+          <div class="field"><label>授課老師</label>
+            <select id="ncTeacher">${data.teachers.map(t=>`<option value="${t.name}" ${editing && editing.teacher===t.name?'selected':''}>${t.name}</option>`).join('')}</select>
+          </div>
+          <div class="field"><label>上課時間</label><input id="ncTime" type="time" value="${editing ? editing.time : '10:00'}"></div>
+          <div class="field"><label>課程長度（分鐘）</label><input id="ncDuration" type="number" value="${editing ? editing.duration : 60}"></div>
+          <div class="field"><label>可預約人數上限</label><input id="ncCap" type="number" value="${editing ? editing.cap : 12}"></div>
+          <div class="field"><label>上課星期</label>
+            <div class="weekday-picker" id="ncDays">
+              ${WEEKDAYS.map(w=>`<div class="wd-chip ${selectedDays.includes(w)?'on':''}" data-w="${w}" onclick="this.classList.toggle('on')">${w}</div>`).join('')}
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="add-bar">
+        ${editing ? `<button class="btn btn-ghost" onclick="cancelEditClass()" style="margin-right:8px;">取消編輯</button>` : ''}
+        <button class="btn btn-primary" onclick="saveClassForm()">${editing ? '儲存修改' : '＋ 新增課程範本'}</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h3>單日調整（停課／加開特別課）</h3></div>
+      <div class="panel-body">
+        <div class="hint-box">💡 平常課表都一樣，但某天想臨時停一堂課，或加開一堂特別課時用這裡，不會影響其他日期的固定課表。<br>⚠️ 如果那堂課已經有學生預約了，停課後系統不會自動通知或退堂，請自己再到「學員管理」幫受影響的學生取消、退還堂數。</div>
+
+        <div class="form-grid" style="margin-bottom:14px;">
+          <div class="field"><label>日期</label><input id="ovDate" type="date" value="${dayOverrideDate}" onchange="dayOverrideDate=this.value"></div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+          <div>
+            <div class="label" style="margin-bottom:8px;">停開某堂固定課</div>
+            <div class="form-grid form-grid.full" style="grid-template-columns:1fr;gap:8px;">
+              <select id="ovCancelTemplate">${data.classes.map(c=>`<option value="${c.id}">${c.title}（${c.teacher} ${c.time}，每週${(c.weekdays||[]).join('')}）</option>`).join('') || '<option value="">尚無課程範本</option>'}</select>
+              <button class="btn btn-danger btn-sm" onclick="addCancelOverride()">這天停開這堂課</button>
+            </div>
+          </div>
+          <div>
+            <div class="label" style="margin-bottom:8px;">加開特別課</div>
+            <div class="form-grid form-grid.full" style="grid-template-columns:1fr;gap:8px;">
+              <input id="ovExtraTitle" placeholder="課程名稱，例如：中秋特別班">
+              <select id="ovExtraTeacher">${data.teachers.map(t=>`<option value="${t.name}">${t.name}</option>`).join('')}</select>
+              <div style="display:flex;gap:8px;">
+                <input id="ovExtraTime" type="time" value="10:00" style="flex:1;">
+                <input id="ovExtraCap" type="number" value="12" placeholder="人數上限" style="width:80px;">
+              </div>
+              <button class="btn btn-primary btn-sm" onclick="addExtraOverride()">這天加開這堂課</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel-head" style="border-top:1px solid var(--line);"><h3>已設定的停課</h3></div>
+      <div class="panel-body pad0">
+        <table><thead><tr><th>日期</th><th>課程</th><th></th></tr></thead>
+        <tbody>${cancelOverrides.map(o=>{
+          const tmpl = data.classes.find(c=>c.id===o.class_template_id);
+          return `<tr><td>${o.date}</td><td>${tmpl ? tmpl.title : '（原課程已刪除）'}</td><td><div class="row-actions"><button class="btn btn-ghost btn-sm" onclick="removeOverride('${o.id}')">取消停課</button></div></td></tr>`;
+        }).join('') || '<tr><td colspan="3" style="text-align:center;color:var(--muted);padding:16px;">目前沒有設定停課</td></tr>'}</tbody></table>
+      </div>
+
+      <div class="panel-head" style="border-top:1px solid var(--line);"><h3>已設定的特別課</h3></div>
+      <div class="panel-body pad0">
+        <table><thead><tr><th>日期</th><th>課程</th><th></th></tr></thead>
+        <tbody>${extraOverrides.map(o=>
+          `<tr><td>${o.date}</td><td>${o.time} ${o.title}（${o.teacher}，上限 ${o.cap} 人）</td><td><div class="row-actions"><button class="btn btn-danger btn-sm" onclick="removeOverride('${o.id}')">刪除</button></div></td></tr>`
+        ).join('') || '<tr><td colspan="3" style="text-align:center;color:var(--muted);padding:16px;">目前沒有加開特別課</td></tr>'}</tbody></table>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h3>開放預約時間</h3></div>
+      <div class="panel-body">
+        <div class="settings-row" style="flex-direction:column;align-items:stretch;padding-top:0;">
+          <div class="desc" style="margin-bottom:10px;">
+            自由指定一段日期區間，只有落在這段區間內的課程，學生才看得到、才能預約，區間以外的日期都不能選。
+            例如想「開放兩個月後的那一週」，開始日期填兩個月後的週一、結束日期填那週的週日即可。
+            ${n.booking_open_start && n.booking_open_end
+              ? `<br><b style="color:var(--sage-dark);">目前開放：${n.booking_open_start} ～ ${n.booking_open_end}</b>`
+              : `<br><b style="color:var(--muted);">目前尚未設定，暫時使用預設規則（開放未來 ${n.booking_window_days} 天）</b>`}
+          </div>
+          <div class="form-grid">
+            <div class="field"><label>開始日期</label><input id="bwStart" type="date" value="${n.booking_open_start||''}"></div>
+            <div class="field"><label>結束日期</label><input id="bwEnd" type="date" value="${n.booking_open_end||''}"></div>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:10px;justify-content:flex-end;align-items:center;">
+            <label style="font-size:12px;color:var(--muted);">未設定區間時，預設開放未來
+              <input type="number" value="${n.booking_window_days}" style="width:55px;border:1px solid var(--line);border-radius:8px;padding:5px 8px;font-size:12.5px;" onchange="updateNotify('booking_window_days', Number(this.value))">
+              天
+            </label>
+            <button class="btn btn-ghost btn-sm" onclick="clearBookingWindow()">清除設定（改回預設規則）</button>
+            <button class="btn btn-primary btn-sm" onclick="saveBookingWindow()">套用這段區間</button>
+          </div>
+        </div>
+      </div>
+    </div>`;
+}
+
+function startEditClass(id){
+  editingClassId = id;
+  render();
+  document.getElementById('classFormPanel').scrollIntoView({behavior:'smooth', block:'center'});
+}
+function cancelEditClass(){
+  editingClassId = null;
+  render();
+}
+
+async function saveClassForm(){
+  const title = document.getElementById('ncTitle').value.trim();
+  const teacher = document.getElementById('ncTeacher').value;
+  const time = document.getElementById('ncTime').value;
+  const duration = Number(document.getElementById('ncDuration').value)||60;
+  const cap = Number(document.getElementById('ncCap').value)||10;
+  const weekdays = [...document.querySelectorAll('#ncDays .wd-chip.on')].map(el=>el.dataset.w);
+  if(!title){ showToast('請輸入課程名稱'); return; }
+  if(weekdays.length===0){ showToast('請至少選擇一個上課星期'); return; }
+  if(!teacher){ showToast('請先在「老師管理」新增至少一位老師'); return; }
+
+  if(editingClassId){
+    const { error } = await db.from('class_templates').update({ title, teacher, time, duration, cap, weekdays }).eq('id', editingClassId);
+    if(error){ showToast('儲存失敗，請稍後再試'); console.error(error); return; }
+    editingClassId = null;
+    await loadAdminState();
+    showToast('已儲存修改');
+    render();
+  } else {
+    const { error } = await db.from('class_templates').insert({ title, teacher, time, duration, cap, weekdays, active:true });
+    if(error){ showToast('新增失敗，請稍後再試'); console.error(error); return; }
+    await loadAdminState();
+    showToast('已新增課程範本，將自動套用到未來課表');
+    render();
+  }
+}
+async function removeClass(id){
+  const { error } = await db.from('class_templates').delete().eq('id', id);
+  if(error){ showToast('刪除失敗'); console.error(error); return; }
+  await loadAdminState(); render(); showToast('已刪除');
+}
+
+/* ---- 單日停課 / 加開特別課 ---- */
+async function addCancelOverride(){
+  const templateId = document.getElementById('ovCancelTemplate').value;
+  if(!templateId){ showToast('請選擇要停開的課程'); return; }
+  const already = dayOverrides.some(o=>o.type==='cancel' && o.date===dayOverrideDate && o.class_template_id===templateId);
+  if(already){ showToast('這天這堂課已經設定過停課了'); return; }
+  const { error } = await db.from('class_overrides').insert({ type:'cancel', date:dayOverrideDate, class_template_id:templateId });
+  if(error){ showToast('設定失敗'); console.error(error); return; }
+  await loadDayOverrides();
+  render();
+  showToast(`已設定 ${dayOverrideDate} 停開這堂課`);
+}
+async function addExtraOverride(){
+  const title = document.getElementById('ovExtraTitle').value.trim();
+  const teacher = document.getElementById('ovExtraTeacher').value;
+  const time = document.getElementById('ovExtraTime').value;
+  const cap = Number(document.getElementById('ovExtraCap').value)||12;
+  if(!title){ showToast('請輸入課程名稱'); return; }
+  if(!teacher){ showToast('請先在「老師管理」新增至少一位老師'); return; }
+  const { error } = await db.from('class_overrides').insert({ type:'extra', date:dayOverrideDate, title, teacher, time, duration:60, cap });
+  if(error){ showToast('新增失敗'); console.error(error); return; }
+  await loadDayOverrides();
+  render();
+  showToast(`已在 ${dayOverrideDate} 加開這堂特別課`);
+}
+async function removeOverride(id){
+  const { error } = await db.from('class_overrides').delete().eq('id', id);
+  if(error){ showToast('刪除失敗'); console.error(error); return; }
+  await loadDayOverrides();
+  render();
+  showToast('已移除');
+}
+
+/* ================= 老師管理 ================= */
+function pageTeachers(){
+  const rows = data.teachers.map(t=>`
+    <tr>
+      <td><span class="avatar-sm">${t.name[0]}</span>${t.name}</td>
+      <td>${t.specialty||'—'}</td>
+      <td>${t.phone||'—'}</td>
+      <td><div class="row-actions"><button class="btn btn-danger btn-sm" onclick="removeTeacher('${t.id}')">移除</button></div></td>
+    </tr>`).join('');
+  return `
+    <div class="page-title">老師管理</div>
+    <div class="page-sub">老師資料會顯示在學生端課程卡片上（例如「👤 Amy 老師」）。</div>
+    <div class="panel">
+      <div class="panel-head"><h3>老師名單</h3></div>
+      <div class="panel-body pad0">
+        <table><thead><tr><th>姓名</th><th>專長</th><th>聯絡電話</th><th></th></tr></thead><tbody>${rows || '<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:20px;">尚無老師資料</td></tr>'}</tbody></table>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-head"><h3>新增老師</h3></div>
+      <div class="panel-body">
+        <div class="form-grid">
+          <div class="field"><label>姓名</label><input id="ntName" placeholder="例如：Rita"></div>
+          <div class="field"><label>聯絡電話</label><input id="ntPhone" placeholder="09XX-XXX-XXX"></div>
+          <div class="field" style="grid-column:1/-1"><label>專長 / 簡介</label><input id="ntSpecialty" placeholder="例如：孕婦瑜珈 / 呼吸療癒"></div>
+        </div>
+      </div>
+      <div class="add-bar"><button class="btn btn-primary" onclick="addTeacher()">＋ 新增老師</button></div>
+    </div>`;
+}
+async function addTeacher(){
+  const name = document.getElementById('ntName').value.trim();
+  const phone = document.getElementById('ntPhone').value.trim();
+  const specialty = document.getElementById('ntSpecialty').value.trim();
+  if(!name){ showToast('請輸入老師姓名'); return; }
+  const { error } = await db.from('teachers').insert({ name, phone: phone||'—', specialty: specialty||'—' });
+  if(error){ showToast('新增失敗'); console.error(error); return; }
+  await loadAdminState();
+  showToast('已新增老師');
+  render();
+}
+async function removeTeacher(id){
+  const { error } = await db.from('teachers').delete().eq('id', id);
+  if(error){ showToast('刪除失敗（該老師可能還有課程範本使用中）'); console.error(error); return; }
+  await loadAdminState(); render(); showToast('已刪除');
+}
+
+/* ================= 店家設定 ================= */
+function pageStore(){
+  const s = data.store;
+  const currentTheme = s.theme || 'sage';
+  const swatches = Object.entries(THEMES).map(([key, t])=>`
+    <div onclick="pickTheme('${key}')" style="cursor:pointer;text-align:center;">
+      <div style="width:40px;height:40px;border-radius:50%;margin:0 auto 6px;background:linear-gradient(135deg, ${t.sage}, ${t.clay});border:3px solid ${key===currentTheme?'var(--ink)':'transparent'};box-shadow:0 1px 3px rgba(0,0,0,.15);"></div>
+      <div style="font-size:11.5px;color:${key===currentTheme?'var(--ink)':'var(--muted)'};font-weight:${key===currentTheme?'700':'400'};">${t.name}</div>
+    </div>`).join('');
+
+  return `
+    <div class="page-title">店家設定</div>
+    <div class="page-sub">這裡設定的店家名稱，會顯示在學生端 LINE 介面的頂部（例如「○○○官方帳號」），以及後台左側選單。</div>
+
+    <div class="panel">
+      <div class="panel-head"><h3>外觀主題</h3></div>
+      <div class="panel-body">
+        <div class="desc" style="margin-bottom:14px;">選一個配色，前台跟後台會同步套用。</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(70px, 1fr));gap:12px;">${swatches}</div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h3>基本資料</h3></div>
+      <div class="panel-body">
+        <div class="form-grid">
+          <div class="field"><label>店家 / 品牌名稱</label><input id="stName" value="${s.name}" placeholder="例如：瑜珈時光"></div>
+          <div class="field"><label>LINE 官方帳號 ID</label><input id="stLineOA" value="${s.line_oa||''}" placeholder="例如：@yoga-time"></div>
+          <div class="field" style="grid-column:1/-1"><label>加好友歡迎訊息</label><textarea id="stGreeting">${s.greeting||''}</textarea></div>
+        </div>
+      </div>
+      <div class="add-bar"><button class="btn btn-primary" onclick="saveStore()">儲存設定</button></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h3>登入密碼</h3></div>
+      <div class="panel-body">
+        <div class="hint-box">🔑 這組密碼存在資料庫裡，不管在哪台裝置登入後台都是同一組。建議定期更換，且不要跟其他平台密碼相同。</div>
+        <div class="form-grid">
+          <div class="field"><label>新密碼</label><input id="stNewPw" type="password" placeholder="至少 6 碼"></div>
+          <div class="field"><label>再次輸入新密碼</label><input id="stNewPw2" type="password" placeholder="請再輸入一次"></div>
+        </div>
+      </div>
+      <div class="add-bar"><button class="btn btn-primary" onclick="changePassword()">更新密碼</button></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h3>忘記密碼用的安全問題</h3></div>
+      <div class="panel-body">
+        <div class="hint-box">💡 如果忘記密碼，登入畫面可以點「忘記密碼？」，回答這個問題答對就能重設密碼。答案不分大小寫。</div>
+        <div class="form-grid">
+          <div class="field" style="grid-column:1/-1"><label>安全問題</label><input id="stSecQ" value="${s.security_question||''}" placeholder="例如：你的瑜珈教室最早是在哪一年成立的？"></div>
+          <div class="field" style="grid-column:1/-1"><label>答案</label><input id="stSecA" value="${s.security_answer||''}" placeholder="請設定答案"></div>
+        </div>
+      </div>
+      <div class="add-bar"><button class="btn btn-primary" onclick="saveSecurityQA()">儲存安全問題</button></div>
+    </div>`;
+}
+function changePassword(){
+  const pw1 = document.getElementById('stNewPw').value;
+  const pw2 = document.getElementById('stNewPw2').value;
+  if(pw1.length<6){ showToast('密碼至少要 6 碼'); return; }
+  if(pw1!==pw2){ showToast('兩次輸入的密碼不一致'); return; }
+  updatePasswordInDB(pw1);
+}
+async function updatePasswordInDB(pw){
+  const { error } = await db.from('store_settings').update({ admin_password: pw }).eq('id', 1);
+  if(error){ showToast('更新失敗'); console.error(error); return; }
+  data.store.admin_password = pw;
+  showToast('密碼已更新，下次登入請使用新密碼');
+}
+async function saveSecurityQA(){
+  const q = document.getElementById('stSecQ').value.trim();
+  const a = document.getElementById('stSecA').value.trim();
+  if(!q || !a){ showToast('問題與答案都要填寫'); return; }
+  const { error } = await db.from('store_settings').update({ security_question:q, security_answer:a }).eq('id', 1);
+  if(error){ showToast('更新失敗'); console.error(error); return; }
+  data.store.security_question = q;
+  data.store.security_answer = a;
+  showToast('已更新安全問題');
+}
+async function saveStore(){
+  const name = document.getElementById('stName').value.trim();
+  const line_oa = document.getElementById('stLineOA').value.trim();
+  const greeting = document.getElementById('stGreeting').value.trim();
+  if(!name){ showToast('店家名稱不能空白'); return; }
+  const { error } = await db.from('store_settings').update({ name, line_oa, greeting }).eq('id', 1);
+  if(error){ showToast('儲存失敗'); console.error(error); return; }
+  await loadAdminState();
+  render();
+  showToast('已更新店家設定（學生端會同步看到新名稱）');
+}
+
+async function pickTheme(themeKey){
+  const { error } = await db.from('store_settings').update({ theme: themeKey }).eq('id', 1);
+  if(error){ showToast('更新失敗'); console.error(error); return; }
+  data.store.theme = themeKey;
+  applyTheme(themeKey);
+  render();
+  showToast(`已套用「${THEMES[themeKey].name}」主題，學生端會同步看到`);
+}
+
+/* ================= 通知設定 ================= */
+function pageNotify(){
+  const n = data.notify;
+  return `
+    <div class="page-title">通知設定</div>
+    <div class="page-sub">這裡設定的內容會由後端排程，透過 LINE Messaging API 自動發送給學生（此頁面本身不會真的寄出訊息，發送排程仍需另外設定）。</div>
+
+    <div class="panel">
+      <div class="panel-head"><h3>課前提醒</h3></div>
+      <div class="panel-body">
+        <div class="settings-row">
+          <div><div class="label">開啟課前一天提醒</div><div class="desc">於上課前一天固定時間，自動推播提醒給有預約該堂課的學生。</div></div>
+          <div class="toggle ${n.reminder_enabled?'on':''}" onclick="toggleNotify('reminder_enabled', ${!n.reminder_enabled})"><div class="knob"></div></div>
+        </div>
+        <div class="settings-row">
+          <div><div class="label">發送時間</div><div class="desc">建議設定在晚間，讓學生有充分時間安排隔天行程。</div></div>
+          <input type="time" value="${n.reminder_time}" style="border:1px solid var(--line);border-radius:8px;padding:7px 10px;font-size:13px;" onchange="updateNotify('reminder_time', this.value)">
+        </div>
+        <div class="settings-row" style="flex-direction:column;align-items:stretch;">
+          <div class="label" style="margin-bottom:8px;">訊息內容範本</div>
+          <textarea id="templateEditor" style="min-height:130px;">${n.reminder_template}</textarea>
+          <div class="desc" style="margin:8px 0;">
+            可用變數：<span class="var-tag">{姓名}</span> <span class="var-tag">{日期}</span> <span class="var-tag">{時間}</span> <span class="var-tag">{課程名稱}</span> <span class="var-tag">{老師}</span>
+          </div>
+          <button class="btn btn-primary" style="align-self:flex-end;" onclick="saveTemplate()">儲存範本</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h3>其他自動化規則</h3></div>
+      <div class="panel-body">
+        <div class="settings-row">
+          <div><div class="label">堂數不足提醒</div><div class="desc">當學生剩餘堂數低於門檻時，自動發送續購提醒。</div></div>
+          <div class="toggle ${n.low_credit_enabled?'on':''}" onclick="toggleNotify('low_credit_enabled', ${!n.low_credit_enabled})"><div class="knob"></div></div>
+        </div>
+        <div class="settings-row">
+          <div><div class="label">提醒門檻</div><div class="desc">剩餘堂數低於此數字時觸發提醒。</div></div>
+          <input type="number" value="${n.low_credit_threshold}" style="width:70px;border:1px solid var(--line);border-radius:8px;padding:7px 10px;font-size:13px;" onchange="updateNotify('low_credit_threshold', Number(this.value))">
+        </div>
+        <div class="settings-row">
+          <div><div class="label">取消預約時限</div><div class="desc">距離上課時間不到幾分鐘就不能自行取消（避免臨時取消影響其他學生）。例如填 60 代表提前 1 小時、填 10 代表提前 10 分鐘。</div></div>
+          <input type="number" value="${n.cancel_deadline_minutes}" style="width:70px;border:1px solid var(--line);border-radius:8px;padding:7px 10px;font-size:13px;" onchange="updateNotify('cancel_deadline_minutes', Number(this.value))"> 分鐘
+        </div>
+      </div>
+    </div>`;
+}
+async function saveBookingWindow(){
+  const start = document.getElementById('bwStart').value;
+  const end = document.getElementById('bwEnd').value;
+  if(!start || !end){ showToast('請選擇開始與結束日期'); return; }
+  if(end < start){ showToast('結束日期不能早於開始日期'); return; }
+  const { error } = await db.from('notify_settings').update({ booking_open_start:start, booking_open_end:end }).eq('id', 1);
+  if(error){ showToast('更新失敗'); console.error(error); return; }
+  data.notify.booking_open_start = start;
+  data.notify.booking_open_end = end;
+  render();
+  showToast('已套用開放預約區間，學生端會即時同步');
+}
+async function clearBookingWindow(){
+  const { error } = await db.from('notify_settings').update({ booking_open_start:null, booking_open_end:null }).eq('id', 1);
+  if(error){ showToast('更新失敗'); console.error(error); return; }
+  data.notify.booking_open_start = null;
+  data.notify.booking_open_end = null;
+  render();
+  showToast('已清除，改用預設的開放天數規則');
+}
+async function saveTemplate(){
+  const val = document.getElementById('templateEditor').value;
+  const { error } = await db.from('notify_settings').update({ reminder_template: val }).eq('id', 1);
+  if(error){ showToast('儲存失敗'); console.error(error); return; }
+  data.notify.reminder_template = val;
+  showToast('已儲存訊息範本');
+}
+async function toggleNotify(key, val){
+  const { error } = await db.from('notify_settings').update({ [key]: val }).eq('id', 1);
+  if(error){ showToast('更新失敗'); console.error(error); return; }
+  data.notify[key] = val; render(); showToast('已更新通知設定');
+}
+async function updateNotify(key, val){
+  const { error } = await db.from('notify_settings').update({ [key]: val }).eq('id', 1);
+  if(error){ showToast('更新失敗'); console.error(error); return; }
+  data.notify[key] = val;
+  showToast('已更新設定');
+}
+
+/* ================= 學員管理 ================= */
+function pageMembers(){
+  if(selectedMemberId) return pageMemberDetail();
+
+  let list = data.members.filter(m =>
+    !memberSearchQuery || (m.display_name||'').toLowerCase().includes(memberSearchQuery.toLowerCase())
+  );
+  if(memberSortBy==='credits_desc') list = [...list].sort((a,b)=>b.remaining_credits-a.remaining_credits);
+  else if(memberSortBy==='credits_asc') list = [...list].sort((a,b)=>a.remaining_credits-b.remaining_credits);
+  else if(memberSortBy==='name') list = [...list].sort((a,b)=>(a.display_name||'').localeCompare(b.display_name||''));
+
+  const rows = list.map(m=>{
+    const avatar = m.picture_url
+      ? `<img src="${m.picture_url}" class="avatar-sm" style="object-fit:cover;">`
+      : `<span class="avatar-sm">${(m.display_name||'?')[0]}</span>`;
+    const recentCount = memberStatsCounts[m.line_user_id] || 0;
+    return `
+    <tr>
+      <td>${avatar}${m.display_name||'（尚未取得姓名）'}</td>
+      <td><b>${m.remaining_credits}</b> 堂</td>
+      <td>${recentCount} 堂</td>
+      <td>
+        <div class="row-actions" style="flex-wrap:wrap;justify-content:flex-end;">
+          <button class="btn btn-ghost btn-sm" onclick="openMemberDetail('${m.line_user_id}')">查看／管理</button>
+          <button class="btn btn-ghost btn-sm" onclick="adjustMember('${m.line_user_id}', 1)">＋1</button>
+          <button class="btn btn-ghost btn-sm" onclick="adjustMember('${m.line_user_id}', -1)">－1</button>
+          <input type="number" id="setCredits-${m.line_user_id}" placeholder="輸入數字" style="width:70px;border:1px solid var(--line);border-radius:8px;padding:5px 8px;font-size:12.5px;">
+          <button class="btn btn-primary btn-sm" onclick="setMemberCredits('${m.line_user_id}')">設定</button>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+
+  return `
+    <div class="page-title">學員管理</div>
+    <div class="page-sub">學員會在<b>第一次透過 LINE 打開預約頁面後</b>自動出現在這份名單裡，你不需要手動新增。點「查看／管理」可以看到選課歷史、新增有效期限的堂數批次、幫學員手動加課或取消課程。</div>
+
+    <div class="panel">
+      <div class="panel-head"><h3>近期預約堂數統計</h3></div>
+      <div class="panel-body">
+        <div class="desc" style="margin-bottom:10px;">計算每位學員在指定日期區間內，總共預約了幾堂課（不含已取消的）。下方學員列表的「近期預約」欄位會依這個區間更新。</div>
+        <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:end;">
+          <div class="field" style="width:auto;"><label>快速設定：最近幾個月</label>
+            <div style="display:flex;gap:6px;">
+              <input type="number" id="statsMonthsInput" value="${statsMonths}" style="width:70px;border:1px solid var(--line);border-radius:8px;padding:7px 10px;font-size:13px;">
+              <button class="btn btn-ghost btn-sm" onclick="applyStatsMonths()">套用</button>
+            </div>
+          </div>
+          <div class="field" style="width:auto;"><label>開始日期</label><input type="date" id="statsStart" value="${statsRangeStart}"></div>
+          <div class="field" style="width:auto;"><label>結束日期</label><input type="date" id="statsEnd" value="${statsRangeEnd}"></div>
+          <button class="btn btn-primary btn-sm" onclick="applyStatsRange()">查詢這段區間</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h3>學員列表</h3></div>
+      <div class="panel-body" style="display:flex;gap:10px;flex-wrap:wrap;">
+        <input type="text" placeholder="搜尋姓名..." value="${memberSearchQuery}" oninput="onMemberSearch(this.value)" style="flex:1;min-width:160px;border:1px solid var(--line);border-radius:8px;padding:8px 12px;font-size:13px;">
+        <select onchange="onMemberSort(this.value)" style="border:1px solid var(--line);border-radius:8px;padding:8px 12px;font-size:13px;">
+          <option value="default" ${memberSortBy==='default'?'selected':''}>預設排序（最近更新優先）</option>
+          <option value="credits_desc" ${memberSortBy==='credits_desc'?'selected':''}>剩餘堂數：高到低</option>
+          <option value="credits_asc" ${memberSortBy==='credits_asc'?'selected':''}>剩餘堂數：低到高</option>
+          <option value="name" ${memberSortBy==='name'?'selected':''}>姓名排序</option>
+        </select>
+      </div>
+      <div class="panel-body pad0">
+        <table><thead><tr><th>學員</th><th>剩餘堂數</th><th>近期預約</th><th></th></tr></thead>
+        <tbody>${rows || '<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:20px;">找不到符合的學員</td></tr>'}</tbody></table>
+      </div>
+    </div>`;
+}
+
+function onMemberSearch(val){ memberSearchQuery = val; render(); }
+function onMemberSort(val){ memberSortBy = val; render(); }
+
+async function applyStatsMonths(){
+  const months = Number(document.getElementById('statsMonthsInput').value) || 1;
+  statsMonths = months;
+  statsRangeEnd = todayISO(0);
+  statsRangeStart = todayISO(-months*30);
+  await loadMemberStats();
+  render();
+  showToast(`已套用最近 ${months} 個月的統計`);
+}
+async function applyStatsRange(){
+  const start = document.getElementById('statsStart').value;
+  const end = document.getElementById('statsEnd').value;
+  if(!start || !end){ showToast('請選擇開始與結束日期'); return; }
+  if(end < start){ showToast('結束日期不能早於開始日期'); return; }
+  statsRangeStart = start; statsRangeEnd = end;
+  await loadMemberStats();
+  render();
+  showToast('已更新統計區間');
+}
+
+/* ---- 堂數批次系統：每批各自的效期，扣款依「最快到期優先」 ---- */
+async function consumeCreditsFromBatches(lineUserId, count){
+  // 從最快到期的批次開始扣，回傳實際扣到的批次 id 陣列（用不到時可忽略）
+  const { data: batches, error } = await db.from('credit_batches')
+    .select('id, remaining, expires_at')
+    .eq('line_user_id', lineUserId)
+    .gt('remaining', 0)
+    .order('expires_at', { ascending:true, nullsFirst:false });
+  if(error || !batches) return;
+  let left = count;
+  for(const b of batches){
+    if(left<=0) break;
+    const take = Math.min(b.remaining, left);
+    await db.from('credit_batches').update({ remaining: b.remaining - take }).eq('id', b.id);
+    left -= take;
+  }
+}
+async function addCreditsToBatch(lineUserId, amount, expiresAt){
+  await db.from('credit_batches').insert({ line_user_id: lineUserId, amount, remaining: amount, expires_at: expiresAt });
+}
+async function loadMemberBatches(lineUserId){
+  const { data, error } = await db.from('credit_batches')
+    .select('*').eq('line_user_id', lineUserId).order('expires_at', { ascending:true, nullsFirst:false });
+  memberBatches = (!error && data) ? data : [];
+}
+
+async function setMemberCredits(lineUserId){
+  const input = document.getElementById(`setCredits-${lineUserId}`);
+  const val = Number(input.value);
+  if(isNaN(val) || val<0){ showToast('請輸入正確的數字'); return; }
+  const m = data.members.find(x=>x.line_user_id===lineUserId);
+  if(!m) return;
+  const diff = val - m.remaining_credits;
+
+  if(diff>0){
+    await addCreditsToBatch(lineUserId, diff, null); // 快速設定沒有指定效期，這批算永久有效
+    const newTotal = (m.total_credits||0) + diff;
+    await db.from('members').update({ remaining_credits: val, total_credits: newTotal }).eq('line_user_id', lineUserId);
+    m.total_credits = newTotal;
+  } else if(diff<0){
+    await consumeCreditsFromBatches(lineUserId, -diff);
+    await db.from('members').update({ remaining_credits: val }).eq('line_user_id', lineUserId);
+  }
+  m.remaining_credits = val;
+  render();
+  showToast(`已將堂數設定為 ${val} 堂`);
+}
+
+function onExpiryTypeChange(val){
+  document.getElementById('cbDateField').style.display = val==='date' ? 'flex' : 'none';
+  document.getElementById('cbDaysField').style.display = val==='days' ? 'flex' : 'none';
+}
+
+async function addBatchForMember(lineUserId){
+  const amount = Number(document.getElementById('cbAmount').value);
+  if(!amount || amount<=0){ showToast('請輸入正確的堂數'); return; }
+  const expiryType = document.getElementById('cbExpiryType').value;
+
+  let expiresAt = null;
+  if(expiryType==='date'){
+    const val = document.getElementById('cbExpiryDate').value;
+    if(!val){ showToast('請選擇到期日'); return; }
+    expiresAt = val;
+  } else if(expiryType==='days'){
+    const days = Number(document.getElementById('cbExpiryDays').value);
+    if(!days || days<=0){ showToast('請輸入正確的天數'); return; }
+    expiresAt = todayISO(days);
+  }
+
+  await addCreditsToBatch(lineUserId, amount, expiresAt);
+  const m = data.members.find(x=>x.line_user_id===lineUserId);
+  const newRemaining = (m ? m.remaining_credits : 0) + amount;
+  const newTotal = (m ? m.total_credits : 0) + amount;
+  await db.from('members').update({ remaining_credits: newRemaining, total_credits: newTotal }).eq('line_user_id', lineUserId);
+  if(m){ m.remaining_credits = newRemaining; m.total_credits = newTotal; }
+
+  await loadMemberBatches(lineUserId);
+  render();
+  showToast(`已新增 ${amount} 堂${expiresAt ? '，效期至 '+expiresAt : '（永久有效）'}`);
+}
+
+async function openMemberDetail(lineUserId){
+  selectedMemberId = lineUserId;
+  const [bookingsRes] = await Promise.all([
+    db.from('bookings').select('*').eq('line_user_id', lineUserId).order('created_at', {ascending:false}),
+    loadDayOverrides(),
+    loadMemberBatches(lineUserId)
+  ]);
+  memberBookings = bookingsRes.data || [];
+  render();
+}
+function backToMemberList(){ selectedMemberId = null; memberBookings = []; memberBatches = []; render(); }
+
+function pageMemberDetail(){
+  const m = data.members.find(x=>x.line_user_id===selectedMemberId);
+  if(!m){ selectedMemberId = null; return pageMembers(); }
+
+  const historyRows = memberBookings.map(b=>`
+    <tr>
+      <td>${b.class_date} ${b.class_time}</td>
+      <td>${b.class_title}（${b.teacher}）</td>
+      <td><span class="tag ${b.status==='active'?'on':'off'}">${b.status==='active'?'已預約':'已取消'}</span></td>
+      <td>${b.status==='active' ? `<div class="row-actions"><button class="btn btn-danger btn-sm" onclick="adminCancelBooking('${b.id}')">取消</button></div>` : ''}</td>
+    </tr>`).join('');
+
+  // 給「幫學員新增預約」用的選單：固定課程範本 + 單日加開的特別課
+  const templateOptions = data.classes.filter(c=>c.active).map(c=>
+    `<option value="t:${c.id}">${c.title}（${c.teacher} ${c.time}，每週${(c.weekdays||[]).join('')}）</option>`
+  ).join('');
+  const todayStr = todayISO(0);
+  const extraOptions = dayOverrides.filter(o=>o.type==='extra' && o.date>=todayStr).map(o=>
+    `<option value="e:${o.id}">⭐ ${o.date} ${o.time} ${o.title}（${o.teacher}，特別課）</option>`
+  ).join('');
+  const allOptions = templateOptions + extraOptions;
+
+  return `
+    <div class="page-title">
+      <span style="cursor:pointer;color:var(--sage);font-size:14px;" onclick="backToMemberList()">← 返回學員列表</span>
+    </div>
+    <div class="page-title" style="margin-top:8px;display:flex;align-items:center;gap:10px;">
+      ${m.picture_url ? `<img src="${m.picture_url}" style="width:34px;height:34px;border-radius:50%;object-fit:cover;">` : ''}
+      ${m.display_name || '（未知學員）'}
+    </div>
+    <div class="page-sub">目前剩餘堂數：<b>${m.remaining_credits}</b> 堂</div>
+
+    <div class="panel">
+      <div class="panel-head"><h3>新增一批堂數</h3></div>
+      <div class="panel-body">
+        <div class="hint-box">💡 每一批堂數可以設定自己的效期，用完或過期不會影響其他批次。</div>
+        <div class="form-grid">
+          <div class="field"><label>堂數</label><input id="cbAmount" type="number" value="10" min="1"></div>
+          <div class="field"><label>效期方式</label>
+            <select id="cbExpiryType" onchange="onExpiryTypeChange(this.value)">
+              <option value="none">不設效期（永久有效）</option>
+              <option value="date">指定到期日</option>
+              <option value="days">幾天後到期</option>
+            </select>
+          </div>
+          <div class="field" id="cbDateField" style="display:none;"><label>到期日</label><input id="cbExpiryDate" type="date"></div>
+          <div class="field" id="cbDaysField" style="display:none;"><label>幾天後到期</label><input id="cbExpiryDays" type="number" value="30" min="1"></div>
+        </div>
+      </div>
+      <div class="add-bar"><button class="btn btn-primary" onclick="addBatchForMember('${m.line_user_id}')">＋ 新增這批堂數</button></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h3>目前的堂數批次</h3></div>
+      <div class="panel-body pad0">
+        <table><thead><tr><th>加入時間</th><th>原始堂數</th><th>剩餘</th><th>效期</th></tr></thead>
+        <tbody>${memberBatches.map(b=>{
+          const isExpired = b.expires_at && b.expires_at < todayISO(0);
+          const expiryLabel = b.expires_at
+            ? (isExpired ? `<span style="color:var(--danger);">已過期（${b.expires_at}）</span>` : b.expires_at)
+            : '永久有效';
+          return `<tr style="${b.remaining<=0?'opacity:.45;':''}">
+            <td>${new Date(b.created_at).toLocaleDateString('zh-TW')}</td>
+            <td>${b.amount} 堂</td>
+            <td><b>${b.remaining}</b> 堂</td>
+            <td>${expiryLabel}</td>
+          </tr>`;
+        }).join('') || '<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:16px;">目前沒有任何堂數批次紀錄</td></tr>'}</tbody></table>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h3>幫學員新增預約</h3></div>
+      <div class="panel-body">
+        <div class="hint-box">💡 選日期＋課程後送出，系統會檢查該日期的星期是否有開這堂課；新增後會自動扣 1 堂。選「⭐ 特別課」的話，日期會自動使用該堂課設定好的日期，上面的日期欄可以不用管。</div>
+        <div class="form-grid">
+          <div class="field"><label>上課日期（僅固定課程需要）</label><input id="adNewDate" type="date"></div>
+          <div class="field"><label>課程</label><select id="adNewClass">${allOptions || '<option value="">尚無課程可選</option>'}</select></div>
+        </div>
+      </div>
+      <div class="add-bar"><button class="btn btn-primary" onclick="adminAddBooking('${m.line_user_id}')">＋ 新增這筆預約</button></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h3>選課歷史</h3></div>
+      <div class="panel-body pad0">
+        <table><thead><tr><th>上課時間</th><th>課程</th><th>狀態</th><th></th></tr></thead>
+        <tbody>${historyRows || '<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:20px;">尚無任何預約紀錄</td></tr>'}</tbody></table>
+      </div>
+    </div>`;
+}
+
+async function adminAddBooking(lineUserId){
+  const selected = document.getElementById('adNewClass').value; // 't:xxx' 或 'e:xxx'
+  if(!selected){ showToast('請選擇課程'); return; }
+  const [type, id] = selected.split(':');
+
+  let classKey, classTemplateId, title, classDate, classDateIso, time, teacher, cap;
+
+  if(type==='t'){
+    const dateVal = document.getElementById('adNewDate').value; // YYYY-MM-DD
+    if(!dateVal){ showToast('請選擇日期'); return; }
+    const tmpl = data.classes.find(c=>c.id===id);
+    if(!tmpl){ showToast('找不到課程範本'); return; }
+    const wd = weekdayLabelOf(dateVal);
+    if(!(tmpl.weekdays||[]).includes(wd)){
+      showToast(`「${tmpl.title}」在每週${wd}沒有開課，請確認日期`);
+      return;
+    }
+    const dateKey = isoToDateKey(dateVal);
+    classKey = `${dateKey}_${tmpl.id}`;
+    classTemplateId = tmpl.id;
+    title = tmpl.title; classDate = dateKeyToLabel(dateVal); classDateIso = dateVal;
+    time = tmpl.time; teacher = tmpl.teacher; cap = tmpl.cap;
+  } else {
+    const override = dayOverrides.find(o=>o.id===id && o.type==='extra');
+    if(!override){ showToast('找不到這堂特別課'); return; }
+    const dateKey = isoToDateKey(override.date);
+    classKey = `${dateKey}_extra_${override.id}`;
+    classTemplateId = null;
+    title = override.title; classDate = dateKeyToLabel(override.date); classDateIso = override.date;
+    time = override.time; teacher = override.teacher; cap = override.cap;
+  }
+
+  let batchId = null;
+  const [consumedBatches] = await Promise.all([
+    db.from('credit_batches').select('id, remaining, expires_at').eq('line_user_id', lineUserId).gt('remaining', 0).order('expires_at', { ascending:true, nullsFirst:false })
+  ]);
+  if(consumedBatches.data && consumedBatches.data.length>0){
+    const b = consumedBatches.data[0];
+    await db.from('credit_batches').update({ remaining: b.remaining - 1 }).eq('id', b.id);
+    batchId = b.id;
+  }
+
+  const { error: insErr } = await db.from('bookings').insert({
+    line_user_id: lineUserId, class_key: classKey, class_template_id: classTemplateId,
+    class_title: title, class_date: classDate, class_date_iso: classDateIso, class_time: time,
+    teacher: teacher, cap: cap, status: 'active', credit_batch_id: batchId
+  });
+  if(insErr){ showToast('新增失敗'); console.error(insErr); return; }
+
+  const m = data.members.find(x=>x.line_user_id===lineUserId);
+  const newCredits = Math.max(0, (m ? m.remaining_credits : 0) - 1);
+  await db.from('members').update({ remaining_credits: newCredits }).eq('line_user_id', lineUserId);
+  if(m) m.remaining_credits = newCredits;
+
+  await openMemberDetail(lineUserId);
+  showToast('已幫學員新增這筆預約，並扣除 1 堂');
+}
+
+async function adminCancelBooking(bookingId){
+  const b = memberBookings.find(x=>x.id===bookingId);
+  if(!b) return;
+  const { error } = await db.from('bookings').update({ status:'cancelled' }).eq('id', bookingId);
+  if(error){ showToast('取消失敗'); console.error(error); return; }
+
+  if(b.credit_batch_id){
+    const { data: batch } = await db.from('credit_batches').select('remaining').eq('id', b.credit_batch_id).single();
+    if(batch) await db.from('credit_batches').update({ remaining: batch.remaining + 1 }).eq('id', b.credit_batch_id);
+  }
+
+  const m = data.members.find(x=>x.line_user_id===b.line_user_id);
+  const newCredits = (m ? m.remaining_credits : 0) + 1;
+  await db.from('members').update({ remaining_credits:newCredits }).eq('line_user_id', b.line_user_id);
+  if(m) m.remaining_credits = newCredits;
+
+  await openMemberDetail(b.line_user_id);
+  showToast('已取消這筆預約，堂數已退還');
+}
+
+async function adjustMember(lineUserId, delta){
+  const m = data.members.find(x=>x.line_user_id===lineUserId);
+  if(!m) return;
+  const newRemaining = Math.max(0, m.remaining_credits + delta);
+
+  if(delta>0){
+    await addCreditsToBatch(lineUserId, delta, null); // 快速加堂沒有指定效期，算永久有效
+    const newTotal = (m.total_credits||0) + delta;
+    await db.from('members').update({ remaining_credits:newRemaining, total_credits:newTotal }).eq('line_user_id', lineUserId);
+    m.total_credits = newTotal;
+  } else {
+    await consumeCreditsFromBatches(lineUserId, -delta);
+    await db.from('members').update({ remaining_credits:newRemaining }).eq('line_user_id', lineUserId);
+  }
+  m.remaining_credits = newRemaining;
+  render();
+  showToast(delta>0 ? '已加 1 堂' : '已扣 1 堂');
+}
+
+/* ================= 每日名單 ================= */
+let rosterDate = new Date().toISOString().slice(0,10);
+let rosterData = [];
+
+async function loadRoster(){
+  const { data: rows, error } = await db.from('bookings')
+    .select('*')
+    .eq('class_date_iso', rosterDate)
+    .eq('status', 'active');
+  rosterData = (!error && rows) ? rows : [];
+}
+async function onRosterDateChange(val){
+  rosterDate = val;
+  await loadRoster();
+  render();
+}
+
+function pageRoster(){
+  const grouped = {};
+  rosterData.forEach(b=>{
+    const key = b.class_key;
+    if(!grouped[key]) grouped[key] = { title:b.class_title, time:b.class_time, teacher:b.teacher, cap:b.cap, students:[] };
+    grouped[key].students.push(memberName(b.line_user_id));
+  });
+  const groups = Object.values(grouped).sort((a,b)=>a.time.localeCompare(b.time));
+
+  const groupsHtml = groups.map(g=>`
+    <div class="panel">
+      <div class="panel-head">
+        <h3>${g.time}　${g.title}（${g.teacher} 老師）</h3>
+        <span class="tag on">${g.students.length} / ${g.cap} 人</span>
+      </div>
+      <div class="panel-body">
+        ${g.students.map(name=>`<div class="settings-row" style="padding:8px 0;"><div class="label" style="font-weight:500;">🧘 ${name}</div></div>`).join('') || '<div class="desc">尚無人預約</div>'}
+      </div>
+    </div>`).join('');
+
+  return `
+    <div class="page-title">每日名單</div>
+    <div class="page-sub">選擇日期，查看當天每堂課有哪些學員預約。</div>
+    <div class="panel">
+      <div class="panel-body">
+        <div class="field" style="max-width:220px;">
+          <label>選擇日期</label>
+          <input type="date" value="${rosterDate}" onchange="onRosterDateChange(this.value)">
+        </div>
+      </div>
+    </div>
+    ${groupsHtml || '<div class="panel"><div class="panel-body" style="text-align:center;color:var(--muted);padding:30px;">這天沒有任何預約紀錄</div></div>'}`;
+}
+
+/* ================= 老師教學紀錄 ================= */
+let teacherLogSelected = data.teachers[0] ? data.teachers[0].name : '';
+let teacherLogData = [];
+
+async function loadTeacherLog(teacherName){
+  teacherLogSelected = teacherName;
+  if(!teacherName){ teacherLogData = []; return; }
+  const { data: rows, error } = await db.from('bookings').select('*').eq('teacher', teacherName);
+  teacherLogData = (!error && rows) ? rows : [];
+}
+async function onTeacherLogChange(val){
+  await loadTeacherLog(val);
+  render();
+}
+
+function pageTeacherLog(){
+  const grouped = {};
+  teacherLogData.forEach(b=>{
+    const key = b.class_key;
+    if(!grouped[key]) grouped[key] = { title:b.class_title, date:b.class_date, time:b.class_time, active:0, cancelled:0 };
+    if(b.status==='active') grouped[key].active++; else grouped[key].cancelled++;
+  });
+  const sessions = Object.values(grouped).sort((a,b)=> (a.date+a.time) < (b.date+b.time) ? 1 : -1);
+  const totalStudents = sessions.reduce((s,x)=>s+x.active, 0);
+
+  const rows = sessions.map(s=>`
+    <tr>
+      <td>${s.date} ${s.time}</td>
+      <td>${s.title}</td>
+      <td><b>${s.active}</b> 人${s.cancelled?`（另有 ${s.cancelled} 人取消）`:''}</td>
+    </tr>`).join('');
+
+  return `
+    <div class="page-title">老師教學紀錄</div>
+    <div class="page-sub">選擇老師，查看這位老師開過的每一堂課，以及每次上課有多少學員參與。</div>
+    <div class="panel">
+      <div class="panel-body">
+        <div class="field" style="max-width:260px;">
+          <label>選擇老師</label>
+          <select onchange="onTeacherLogChange(this.value)">
+            ${data.teachers.map(t=>`<option value="${t.name}" ${t.name===teacherLogSelected?'selected':''}>${t.name}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+    </div>
+    ${teacherLogSelected ? `
+    <div class="stat-cards" style="grid-template-columns:repeat(2,1fr);">
+      <div class="stat-card"><div class="num">${sessions.length}</div><div class="lbl">總開課次數</div></div>
+      <div class="stat-card"><div class="num">${totalStudents}</div><div class="lbl">累計參與學員人次</div></div>
+    </div>
+    <div class="panel">
+      <div class="panel-head"><h3>開課紀錄</h3></div>
+      <div class="panel-body pad0">
+        <table><thead><tr><th>上課時間</th><th>課程</th><th>參與人數</th></tr></thead>
+        <tbody>${rows || '<tr><td colspan="3" style="text-align:center;color:var(--muted);padding:20px;">這位老師尚無開課紀錄</td></tr>'}</tbody></table>
+      </div>
+    </div>` : ''}`;
+}
+
+const PAGES = {overview:pageOverview, store:pageStore, classes:pageClasses, teachers:pageTeachers, notify:pageNotify, members:pageMembers, roster:pageRoster, teacherlog:pageTeacherLog};
+
+function render(){
+  document.getElementById('sidebarBrand').innerHTML = data.store.name + '<span>後台管理系統</span>';
+  document.getElementById('mainArea').innerHTML = PAGES[currentPage]();
+}
+
+document.querySelectorAll('.nav-item').forEach(item=>{
+  item.addEventListener('click', async ()=>{
+    document.querySelectorAll('.nav-item').forEach(i=>i.classList.remove('active'));
+    item.classList.add('active');
+    currentPage = item.dataset.page;
+    selectedMemberId = null; memberBookings = [];
+    editingClassId = null;
+    if(currentPage==='classes'){ await loadDayOverrides(); }
+    if(currentPage==='members'){ await loadMemberStats(); }
+    if(currentPage==='roster'){ await loadRoster(); }
+    if(currentPage==='teacherlog'){ await loadTeacherLog(teacherLogSelected || (data.teachers[0] && data.teachers[0].name) || ''); }
+    render();
+  });
+});
+
+const SESSION_KEY = 'admin-logged-in-v1';
+
+function tryLogin(){
+  const input = document.getElementById('loginPassword');
+  const err = document.getElementById('loginErr');
+  const correctPw = data.store.admin_password || 'yoga1234';
+  if(input.value === correctPw){
+    localStorage.setItem(SESSION_KEY, '1'); // 記住這台裝置已登入，重新整理不用再輸入密碼
+    document.getElementById('loginScreen').style.display = 'none';
+    document.getElementById('app').style.display = 'flex';
+    render();
+  } else {
+    err.textContent = '密碼錯誤，請再試一次';
+    input.value = '';
+    input.focus();
+  }
+}
+function logout(){
+  localStorage.removeItem(SESSION_KEY);
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('loginScreen').style.display = 'flex';
+  document.getElementById('loginPassword').value = '';
+  document.getElementById('loginErr').textContent = '';
+  showLoginBox();
+}
+
+/* ---- 忘記密碼流程 ---- */
+function showForgotBox(){
+  document.getElementById('loginBox').style.display = 'none';
+  document.getElementById('forgotBox').style.display = 'block';
+  document.getElementById('forgotStep1').style.display = 'block';
+  document.getElementById('forgotStep2').style.display = 'none';
+  document.getElementById('securityQuestionText').textContent = data.store.security_question || '（尚未設定安全問題，請聯繫系統開發者協助重設）';
+  document.getElementById('securityAnswerInput').value = '';
+  document.getElementById('forgotErr1').textContent = '';
+}
+function showLoginBox(){
+  document.getElementById('forgotBox').style.display = 'none';
+  document.getElementById('loginBox').style.display = 'block';
+  document.getElementById('loginPassword').value = '';
+  document.getElementById('loginErr').textContent = '';
+}
+function verifySecurityAnswer(){
+  const ans = document.getElementById('securityAnswerInput').value.trim();
+  const correct = (data.store.security_answer || '').trim();
+  const err = document.getElementById('forgotErr1');
+  if(!correct){ err.textContent = '尚未設定安全問題答案，無法透過此方式重設，請直接到 Supabase 後台修改 store_settings 資料表。'; return; }
+  if(ans.toLowerCase() !== correct.toLowerCase()){
+    err.textContent = '答案不正確，請再試一次';
+    return;
+  }
+  document.getElementById('forgotStep1').style.display = 'none';
+  document.getElementById('forgotStep2').style.display = 'block';
+}
+async function resetPasswordViaForgot(){
+  const pw1 = document.getElementById('newPwInput').value;
+  const pw2 = document.getElementById('newPwInput2').value;
+  const err = document.getElementById('forgotErr2');
+  if(pw1.length<6){ err.textContent = '密碼至少要 6 碼'; return; }
+  if(pw1!==pw2){ err.textContent = '兩次輸入的密碼不一致'; return; }
+  const { error } = await db.from('store_settings').update({ admin_password: pw1 }).eq('id', 1);
+  if(error){ err.textContent = '重設失敗，請稍後再試'; console.error(error); return; }
+  data.store.admin_password = pw1;
+  showToast('密碼已重設，請用新密碼登入');
+  showLoginBox();
+}
+
+(async function init(){
+  try{
+    await loadAdminState();
+    applyTheme(data.store.theme || 'sage');
+  }catch(e){
+    console.error('讀取資料庫失敗，請確認 Supabase 資料表是否已建立：', e);
+  }
+  if(localStorage.getItem(SESSION_KEY) === '1'){
+    // 這台裝置先前登入過，不用再輸入密碼
+    document.getElementById('loginScreen').style.display = 'none';
+    document.getElementById('app').style.display = 'flex';
+    render();
+  } else {
+    document.getElementById('loginPassword').focus();
+  }
+})();
+</script>
+</body>
+</html>
