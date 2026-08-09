@@ -75,6 +75,7 @@
   .tag{display:inline-block;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:600;}
   .tag.on{background:var(--sage-light);color:var(--sage-dark);}
   .tag.off{background:#f1efe8;color:var(--muted);}
+  .tag.warn{background:#fdf1d0;color:#8a6a1f;}
   .row-actions{display:flex;gap:6px;justify-content:flex-end;}
   .avatar-sm{width:26px;height:26px;border-radius:50%;background:linear-gradient(135deg,var(--sage),var(--clay));display:inline-flex;align-items:center;justify-content:center;color:#fff;font-size:11px;font-weight:700;margin-right:8px;}
 
@@ -1105,13 +1106,25 @@ function pageMemberDetail(){
   const m = data.members.find(x=>x.line_user_id===selectedMemberId);
   if(!m){ selectedMemberId = null; return pageMembers(); }
 
-  const historyRows = memberBookings.map(b=>`
+  function isBookingPast(b){
+    if(!b.class_date_iso) return false;
+    const [y,mo,d] = b.class_date_iso.split('-').map(Number);
+    const [hh,mm] = (b.class_time||'00:00').split(':').map(Number);
+    return new Date(y, mo-1, d, hh, mm) <= new Date();
+  }
+
+  const historyRows = memberBookings.map(b=>{
+    const past = b.status==='active' && isBookingPast(b);
+    const statusLabel = b.status!=='active' ? '已取消' : (past ? '已結束' : '已預約');
+    const statusClass = b.status!=='active' ? 'off' : (past ? 'warn' : 'on');
+    return `
     <tr>
       <td>${b.class_date} ${b.class_time}</td>
       <td>${b.class_title}（${b.teacher}）</td>
-      <td><span class="tag ${b.status==='active'?'on':'off'}">${b.status==='active'?'已預約':'已取消'}</span></td>
-      <td>${b.status==='active' ? `<div class="row-actions"><button class="btn btn-danger btn-sm" onclick="adminCancelBooking('${b.id}')">取消</button></div>` : ''}</td>
-    </tr>`).join('');
+      <td><span class="tag ${statusClass}">${statusLabel}</span></td>
+      <td>${(b.status==='active' && !past) ? `<div class="row-actions"><button class="btn btn-danger btn-sm" onclick="adminCancelBooking('${b.id}')">取消</button></div>` : ''}</td>
+    </tr>`;
+  }).join('');
 
   // 給「幫學員新增預約」用的選單：固定課程範本 + 單日加開的特別課
   const templateOptions = data.classes.filter(c=>c.active).map(c=>
@@ -1189,13 +1202,22 @@ function pageMemberDetail(){
     <div class="panel">
       <div class="panel-head"><h3>幫學員新增預約</h3></div>
       <div class="panel-body">
-        <div class="hint-box">💡 選日期＋課程後送出，系統會檢查該日期的星期是否有開這堂課；新增後會自動扣 1 堂。選「⭐ 特別課」的話，日期會自動使用該堂課設定好的日期，上面的日期欄可以不用管。</div>
+        <div class="hint-box">💡 選課程後，可以一次選多個日期（點「＋新增一個日期」增加欄位），系統會逐一檢查每個日期的星期是否有開這堂課；每成功一筆會自動扣 1 堂。選「⭐ 特別課」的話，日期欄位會被忽略，系統自動使用該堂課設定好的日期。</div>
         <div class="form-grid">
-          <div class="field"><label>上課日期（僅固定課程需要）</label><input id="adNewDate" type="date"></div>
+          <div class="field" style="grid-column:1/-1;">
+            <label>上課日期（可多選，僅固定課程需要）</label>
+            <div id="adNewDatesContainer">
+              <div class="date-row" style="display:flex;gap:6px;margin-bottom:6px;">
+                <input type="date" class="adDateInput" style="flex:1;border:1px solid var(--line);border-radius:9px;padding:9px 11px;font-size:13px;background:var(--paper);color:var(--ink);">
+                <button type="button" class="btn btn-ghost btn-sm" onclick="removeDateRow(this)">✕</button>
+              </div>
+            </div>
+            <button type="button" class="btn btn-ghost btn-sm" onclick="addDateRow()">＋ 新增一個日期</button>
+          </div>
           <div class="field"><label>課程</label><select id="adNewClass">${allOptions || '<option value="">尚無課程可選</option>'}</select></div>
         </div>
       </div>
-      <div class="add-bar"><button class="btn btn-primary" onclick="adminAddBooking('${m.line_user_id}')">＋ 新增這筆預約</button></div>
+      <div class="add-bar"><button class="btn btn-primary" onclick="adminAddBooking('${m.line_user_id}')">＋ 新增這些預約</button></div>
     </div>
 
     <div class="panel">
@@ -1207,62 +1229,98 @@ function pageMemberDetail(){
     </div>`;
 }
 
-async function adminAddBooking(lineUserId){
-  const selected = document.getElementById('adNewClass').value; // 't:xxx' 或 'e:xxx'
-  if(!selected){ showToast('請選擇課程'); return; }
-  const [type, id] = selected.split(':');
+function addDateRow(){
+  const container = document.getElementById('adNewDatesContainer');
+  const row = document.createElement('div');
+  row.className = 'date-row';
+  row.style.cssText = 'display:flex;gap:6px;margin-bottom:6px;';
+  row.innerHTML = `<input type="date" class="adDateInput" style="flex:1;border:1px solid var(--line);border-radius:9px;padding:9px 11px;font-size:13px;background:var(--paper);color:var(--ink);">
+    <button type="button" class="btn btn-ghost btn-sm" onclick="removeDateRow(this)">✕</button>`;
+  container.appendChild(row);
+}
+function removeDateRow(btn){
+  const container = document.getElementById('adNewDatesContainer');
+  const row = btn.closest('.date-row');
+  if(container.children.length<=1){ row.querySelector('input').value=''; return; } // 至少留一列，清空就好
+  row.remove();
+}
 
-  let classKey, classTemplateId, title, classDate, classDateIso, time, teacher, cap;
-
-  if(type==='t'){
-    const dateVal = document.getElementById('adNewDate').value; // YYYY-MM-DD
-    if(!dateVal){ showToast('請選擇日期'); return; }
-    const tmpl = data.classes.find(c=>c.id===id);
-    if(!tmpl){ showToast('找不到課程範本'); return; }
-    const wd = weekdayLabelOf(dateVal);
-    if(!(tmpl.weekdays||[]).includes(wd)){
-      showToast(`「${tmpl.title}」在每週${wd}沒有開課，請確認日期`);
-      return;
-    }
-    const dateKey = isoToDateKey(dateVal);
-    classKey = `${dateKey}_${tmpl.id}`;
-    classTemplateId = tmpl.id;
-    title = tmpl.title; classDate = dateKeyToLabel(dateVal); classDateIso = dateVal;
-    time = tmpl.time; teacher = tmpl.teacher; cap = tmpl.cap;
-  } else {
-    const override = dayOverrides.find(o=>o.id===id && o.type==='extra');
-    if(!override){ showToast('找不到這堂特別課'); return; }
-    const dateKey = isoToDateKey(override.date);
-    classKey = `${dateKey}_extra_${override.id}`;
-    classTemplateId = null;
-    title = override.title; classDate = dateKeyToLabel(override.date); classDateIso = override.date;
-    time = override.time; teacher = override.teacher; cap = override.cap;
-  }
-
-  let batchId = null;
-  const [consumedBatches] = await Promise.all([
-    db.from('credit_batches').select('id, remaining, expires_at').eq('line_user_id', lineUserId).gt('remaining', 0).order('expires_at', { ascending:true, nullsFirst:false })
-  ]);
-  if(consumedBatches.data && consumedBatches.data.length>0){
-    const b = consumedBatches.data[0];
+async function insertOneBooking(lineUserId, c){
+  // 先找一批還有剩的堂數批次來扣（越快到期的優先扣）
+  let batchId = null, batchRemainingBefore = null;
+  const { data: batches } = await db.from('credit_batches')
+    .select('id, remaining').eq('line_user_id', lineUserId).gt('remaining', 0)
+    .order('expires_at', { ascending:true, nullsFirst:false });
+  if(batches && batches.length>0){
+    const b = batches[0];
+    batchId = b.id; batchRemainingBefore = b.remaining;
     await db.from('credit_batches').update({ remaining: b.remaining - 1 }).eq('id', b.id);
-    batchId = b.id;
   }
 
-  const { error: insErr } = await db.from('bookings').insert({
-    line_user_id: lineUserId, class_key: classKey, class_template_id: classTemplateId,
-    class_title: title, class_date: classDate, class_date_iso: classDateIso, class_time: time,
-    teacher: teacher, cap: cap, status: 'active', credit_batch_id: batchId
+  const { error } = await db.from('bookings').insert({
+    line_user_id: lineUserId, class_key: c.classKey, class_template_id: c.classTemplateId,
+    class_title: c.title, class_date: c.classDate, class_date_iso: c.classDateIso, class_time: c.time,
+    teacher: c.teacher, cap: c.cap, status: 'active', credit_batch_id: batchId
   });
-  if(insErr){ showToast('新增失敗'); console.error(insErr); return; }
+
+  if(error){
+    if(batchId!==null) await db.from('credit_batches').update({ remaining: batchRemainingBefore }).eq('id', batchId); // 失敗就把批次退回去
+    return false;
+  }
 
   const m = data.members.find(x=>x.line_user_id===lineUserId);
   const newCredits = Math.max(0, (m ? m.remaining_credits : 0) - 1);
   await db.from('members').update({ remaining_credits: newCredits }).eq('line_user_id', lineUserId);
   if(m) m.remaining_credits = newCredits;
+  return true;
+}
 
-  await openMemberDetail(lineUserId);
-  showToast('已幫學員新增這筆預約，並扣除 1 堂');
+async function adminAddBooking(lineUserId){
+  const selected = document.getElementById('adNewClass').value; // 't:xxx' 或 'e:xxx'
+  if(!selected){ showToast('請選擇課程'); return; }
+  const [type, id] = selected.split(':');
+
+  if(type==='t'){
+    const tmpl = data.classes.find(c=>c.id===id);
+    if(!tmpl){ showToast('找不到課程範本'); return; }
+
+    const dateValues = [...document.querySelectorAll('.adDateInput')].map(i=>i.value).filter(Boolean);
+    const uniqueDates = [...new Set(dateValues)];
+    if(uniqueDates.length===0){ showToast('請至少選擇一個日期'); return; }
+
+    let successCount = 0;
+    const skipped = [];
+    for(const dateVal of uniqueDates){
+      const wd = weekdayLabelOf(dateVal);
+      if(!(tmpl.weekdays||[]).includes(wd)){
+        skipped.push(`${dateVal}（每週${wd}沒開這堂課）`);
+        continue;
+      }
+      const dateKey = isoToDateKey(dateVal);
+      const ok = await insertOneBooking(lineUserId, {
+        classKey: `${dateKey}_${tmpl.id}`, classTemplateId: tmpl.id, title: tmpl.title,
+        classDate: dateKeyToLabel(dateVal), classDateIso: dateVal,
+        time: tmpl.time, teacher: tmpl.teacher, cap: tmpl.cap
+      });
+      if(ok) successCount++; else skipped.push(`${dateVal}（可能已經預約過）`);
+    }
+
+    await openMemberDetail(lineUserId);
+    if(successCount>0) showToast(`已新增 ${successCount} 筆預約，共扣除 ${successCount} 堂`);
+    if(skipped.length>0) showToast(`有 ${skipped.length} 筆沒有新增成功：${skipped.slice(0,3).join('、')}`);
+
+  } else {
+    const override = dayOverrides.find(o=>o.id===id && o.type==='extra');
+    if(!override){ showToast('找不到這堂特別課'); return; }
+    const dateKey = isoToDateKey(override.date);
+    const ok = await insertOneBooking(lineUserId, {
+      classKey: `${dateKey}_extra_${override.id}`, classTemplateId: null, title: override.title,
+      classDate: dateKeyToLabel(override.date), classDateIso: override.date,
+      time: override.time, teacher: override.teacher, cap: override.cap
+    });
+    await openMemberDetail(lineUserId);
+    showToast(ok ? '已幫學員新增這筆預約，並扣除 1 堂' : '新增失敗，可能已經預約過這堂課');
+  }
 }
 
 async function adminCancelBooking(bookingId){
