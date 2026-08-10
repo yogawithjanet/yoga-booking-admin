@@ -42,7 +42,7 @@
   .nav-item.active{background:rgba(255,255,255,.1);color:#fff;border-left-color:var(--clay);}
 
   /* ---- Main ---- */
-  .main{flex:1;padding:30px 36px;max-width:920px;}
+  .main{flex:1;padding:30px 36px;max-width:1220px;}
   .page-title{font-size:20px;font-weight:800;margin:0 0 4px;}
   .page-sub{font-size:13px;color:var(--muted);margin:0 0 24px;line-height:1.6;}
 
@@ -127,6 +127,22 @@
     display:flex;gap:9px;background:var(--clay-light);border:1px solid #eeceb6;
     border-radius:10px;padding:10px 13px;font-size:12px;color:#8a5a35;line-height:1.6;margin-bottom:18px;
   }
+
+  /* ---- 課程日曆 ---- */
+  .mini-calendar{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;}
+  .mc-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;}
+  .mc-month-label{font-weight:700;font-size:14px;}
+  .mc-nav{border:none;background:var(--sage-light);color:var(--sage-dark);width:26px;height:26px;border-radius:50%;font-size:15px;cursor:pointer;}
+  .mc-weekdays{display:grid;grid-template-columns:repeat(7,1fr);text-align:center;font-size:11px;color:var(--muted);margin-bottom:4px;}
+  .mc-grid{display:grid;grid-template-columns:repeat(7,1fr);row-gap:3px;}
+  .mc-cell{aspect-ratio:1;display:flex;flex-direction:column;align-items:center;justify-content:center;border-radius:9px;cursor:pointer;font-size:12.5px;color:var(--ink);}
+  .mc-cell.empty{cursor:default;}
+  .mc-cell.past{color:#d8d4c9;}
+  .mc-dot{width:4px;height:4px;border-radius:50%;background:var(--sage);margin-top:2px;}
+  .mc-cell.selected{background:var(--sage);color:#fff;font-weight:700;}
+  .mc-cell.selected .mc-dot{background:#fff;}
+  .mc-cell.today:not(.selected){box-shadow:inset 0 0 0 1.5px var(--sage);font-weight:700;}
+
   .toast{
     position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(20px);
     background:var(--ink);color:#fff;padding:11px 20px;border-radius:30px;font-size:13px;
@@ -245,7 +261,7 @@ function applyTheme(themeName){
 }
 
 let data = {
-  store: { name:'瑜珈時光', line_oa:'', greeting:'', admin_password:'yoga1234', security_question:'', security_answer:'', theme:'sage' },
+  store: { name:'瑜珈時光', line_oa:'', greeting:'', admin_password:'yoga1234', security_question:'', security_answer:'', theme:'sage', available_tags:[] },
   classes: [],   // class_templates
   teachers: [],
   members: [],
@@ -362,6 +378,136 @@ async function loadDayOverrides(){
   dayOverrides = (!error && rows) ? rows : [];
 }
 
+/* ---- 課程日曆（像 Google 日曆一樣點日期來調整單日課程） ---- */
+const todayNow = new Date();
+let classesCalendarView = { year: todayNow.getFullYear(), month: todayNow.getMonth()+1 };
+let classesCalendarSelected = null; // 目前選中的日期（YYYY-MM-DD）
+
+function getDayOccurrences(iso){
+  const wd = weekdayLabelOf(iso);
+  const cancelledTemplateIds = new Set(
+    dayOverrides.filter(o=>o.type==='cancel' && o.date===iso).map(o=>o.class_template_id)
+  );
+  const recurring = data.classes.filter(c=>c.active && (c.weekdays||[]).includes(wd) && !cancelledTemplateIds.has(c.id));
+  const extras = dayOverrides.filter(o=>o.type==='extra' && o.date===iso);
+  return { recurring, extras };
+}
+
+function buildClassesCalendarHTML(){
+  const { year, month } = classesCalendarView;
+  const startWeekday = new Date(year, month-1, 1).getDay();
+  const daysInMonth = new Date(year, month, 0).getDate();
+  const today = new Date(); today.setHours(0,0,0,0);
+  const todayIso = todayISO(0);
+
+  let cells = '';
+  for(let i=0;i<startWeekday;i++) cells += `<div class="mc-cell empty"></div>`;
+  for(let day=1; day<=daysInMonth; day++){
+    const iso = `${year}-${String(month).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+    const cellDate = new Date(year, month-1, day);
+    const isPast = cellDate < today;
+    const { recurring, extras } = getDayOccurrences(iso);
+    const hasClasses = (recurring.length>0 || extras.length>0);
+    const isSelected = iso===classesCalendarSelected;
+    const isToday = iso===todayIso;
+    let cls = 'mc-cell';
+    if(isPast) cls += ' past';
+    if(isSelected) cls += ' selected';
+    if(isToday) cls += ' today';
+    cells += `<div class="${cls}" onclick="selectClassesCalendarDate('${iso}')">
+      <span>${day}</span>
+      ${hasClasses ? '<span class="mc-dot"></span>' : ''}
+    </div>`;
+  }
+
+  return `
+    <div class="mini-calendar">
+      <div class="mc-header">
+        <button class="mc-nav" onclick="changeClassesCalendarMonth(-1)">‹</button>
+        <span class="mc-month-label">${year} 年 ${month} 月</span>
+        <button class="mc-nav" onclick="changeClassesCalendarMonth(1)">›</button>
+      </div>
+      <div class="mc-weekdays">${['日','一','二','三','四','五','六'].map(w=>`<span>${w}</span>`).join('')}</div>
+      <div class="mc-grid">${cells}</div>
+    </div>`;
+}
+
+function buildDayDetailHTML(){
+  if(!classesCalendarSelected){
+    return `<div class="desc" style="padding:10px 4px;">👈 點日曆上的日期，查看那天的課程並快速調整</div>`;
+  }
+  const iso = classesCalendarSelected;
+  const label = dateKeyToLabel(isoToDateKey(iso));
+  const { recurring, extras } = getDayOccurrences(iso);
+
+  let rowsHtml = '';
+  recurring.forEach(c=>{
+    rowsHtml += `
+    <div class="settings-row">
+      <div><div class="label">${c.time}　${c.title}（${c.teacher}）</div><div class="desc">固定課程</div></div>
+      <div class="row-actions">
+        <button class="btn btn-ghost btn-sm" onclick="quickEditOccurrence('${iso}','${c.id}')">只修改這天</button>
+        <button class="btn btn-danger btn-sm" onclick="quickCancelOccurrence('${iso}','${c.id}')">停開這天</button>
+      </div>
+    </div>`;
+  });
+  extras.forEach(o=>{
+    rowsHtml += `
+    <div class="settings-row">
+      <div><div class="label">${o.time}　${o.title}（${o.teacher}）</div><div class="desc">⭐ 這天加開的特別課</div></div>
+      <div class="row-actions">
+        <button class="btn btn-danger btn-sm" onclick="removeOverride('${o.id}')">刪除</button>
+      </div>
+    </div>`;
+  });
+  if(!rowsHtml) rowsHtml = `<div class="desc" style="padding:6px 0;">這天沒有排課，可以在下方「加開特別課」新增一堂</div>`;
+
+  return `
+    <div class="label" style="margin-bottom:6px;">${label}</div>
+    ${rowsHtml}`;
+}
+
+function selectClassesCalendarDate(iso){
+  classesCalendarSelected = iso;
+  dayOverrideDate = iso; // 同步到下方手動表單的日期欄，方便直接加開特別課
+  render();
+}
+function changeClassesCalendarMonth(delta){
+  let { year, month } = classesCalendarView;
+  month += delta;
+  if(month<1){ month=12; year--; }
+  if(month>12){ month=1; year++; }
+  classesCalendarView = { year, month };
+  render();
+}
+async function quickCancelOccurrence(iso, templateId){
+  const already = dayOverrides.some(o=>o.type==='cancel' && o.date===iso && o.class_template_id===templateId);
+  if(already){ showToast('這天已經停開了'); return; }
+  const { error } = await db.from('class_overrides').insert({ type:'cancel', date:iso, class_template_id:templateId });
+  if(error){ showToast('操作失敗'); console.error(error); return; }
+  await loadDayOverrides();
+  render();
+  showToast('已停開這一天的課');
+}
+async function quickEditOccurrence(iso, templateId){
+  const tmpl = data.classes.find(c=>c.id===templateId);
+  if(!tmpl) return;
+  await quickCancelOccurrence(iso, templateId); // 先停開原本這天的固定課，改用下面的特別課取代
+  dayOverrideDate = iso;
+  render();
+  setTimeout(()=>{
+    const setVal = (id, val)=>{ const el = document.getElementById(id); if(el) el.value = val; };
+    setVal('ovExtraTitle', tmpl.title);
+    setVal('ovExtraTeacher', tmpl.teacher);
+    setVal('ovExtraTime', tmpl.time);
+    setVal('ovExtraCap', tmpl.cap);
+    setVal('ovExtraDescription', tmpl.description||'');
+    const el = document.getElementById('ovExtraTitle');
+    if(el) el.scrollIntoView({behavior:'smooth', block:'center'});
+  }, 60);
+  showToast('已停開原本這天的課，內容已幫你帶到下方「加開特別課」，改完直接送出即可');
+}
+
 function pageClasses(){
   const n = data.notify;
   const rows = data.classes.map(c=>`
@@ -389,6 +535,17 @@ function pageClasses(){
     <div class="page-title">課程設定</div>
     <div class="page-sub">設定「每週固定課表」，系統會依照這裡的星期設定，自動產生課表給學生選；也可以在下方控制學生什麼時候能開始預約，或針對單一天調整課程。</div>
     <div class="hint-box">💡 例如「哈達瑜珈」設定為每週二、四、六 10:30，系統就會自動在接下來每個週二/四/六產生一堂可預約課程，不用每天手動新增。</div>
+
+    <div class="panel">
+      <div class="panel-head"><h3>課程日曆</h3></div>
+      <div class="panel-body">
+        <div class="desc" style="margin-bottom:12px;">點日期查看那天的課程，可以直接「停開這天」或「只修改這天」（不影響其他星期三的固定課表），有點的日期代表當天有排課。</div>
+        <div style="display:grid;grid-template-columns:280px 1fr;gap:20px;align-items:start;">
+          <div>${buildClassesCalendarHTML()}</div>
+          <div style="min-height:120px;">${buildDayDetailHTML()}</div>
+        </div>
+      </div>
+    </div>
 
     <div class="panel">
       <div class="panel-head"><h3>目前課程範本</h3></div>
@@ -817,17 +974,19 @@ async function updateNotify(key, val){
 }
 
 /* ================= 學員管理 ================= */
-let expandedBatchMemberId = null; // 目前展開「新增一批堂數」表單的學員
 let expandedTagMemberId = null;   // 目前展開「標籤編輯」的學員
+let batchCreditSelectedMembers = new Set();
+let batchCreditTagFilter = '';
+let batchCreditSearchQuery = '';
 
 function toggleTagEditor(lineUserId){
   expandedTagMemberId = (expandedTagMemberId===lineUserId) ? null : lineUserId;
   render();
 }
-async function addMemberTag(lineUserId){
-  const input = document.getElementById(`newTagInput-${lineUserId}`);
-  const tag = input.value.trim();
-  if(!tag){ showToast('請輸入標籤文字'); return; }
+async function addMemberTagFromSelect(lineUserId){
+  const select = document.getElementById(`tagSelect-${lineUserId}`);
+  const tag = select.value;
+  if(!tag){ showToast('請先選擇標籤'); return; }
   const m = data.members.find(x=>x.line_user_id===lineUserId);
   if(!m) return;
   const tags = Array.isArray(m.tags) ? m.tags : [];
@@ -848,6 +1007,78 @@ async function removeMemberTag(lineUserId, tag){
   render();
 }
 
+/* ---- 標籤主清單管理（在學員管理頁最上方設定） ---- */
+async function addAvailableTag(){
+  const input = document.getElementById('newAvailableTagInput');
+  const tag = input.value.trim();
+  if(!tag){ showToast('請輸入標籤文字'); return; }
+  const tags = data.store.available_tags || [];
+  if(tags.includes(tag)){ showToast('這個標籤已經存在了'); return; }
+  const newTags = [...tags, tag];
+  const { error } = await db.from('store_settings').update({ available_tags:newTags }).eq('id', 1);
+  if(error){ showToast('新增失敗'); console.error(error); return; }
+  data.store.available_tags = newTags;
+  input.value = '';
+  render();
+}
+async function removeAvailableTag(tag){
+  const newTags = (data.store.available_tags||[]).filter(t=>t!==tag);
+  const { error } = await db.from('store_settings').update({ available_tags:newTags }).eq('id', 1);
+  if(error){ showToast('移除失敗'); console.error(error); return; }
+  data.store.available_tags = newTags;
+  render();
+}
+
+/* ---- 批次加堂數（可選多位學員，用標籤篩選） ---- */
+function toggleBatchCreditMember(lineUserId, checked){
+  if(checked) batchCreditSelectedMembers.add(lineUserId);
+  else batchCreditSelectedMembers.delete(lineUserId);
+  render();
+}
+function toggleBatchCreditSelectAll(list){
+  const allSelected = list.every(m=>batchCreditSelectedMembers.has(m.line_user_id));
+  if(allSelected) list.forEach(m=>batchCreditSelectedMembers.delete(m.line_user_id));
+  else list.forEach(m=>batchCreditSelectedMembers.add(m.line_user_id));
+  render();
+}
+function onBatchCreditTagFilter(val){ batchCreditTagFilter = val; render(); }
+function onBatchCreditSearch(val){ batchCreditSearchQuery = val; render(); }
+function onBatchCreditExpiryTypeChange(val){
+  document.getElementById('bcDateField').style.display = val==='date' ? 'flex' : 'none';
+  document.getElementById('bcDaysField').style.display = val==='days' ? 'flex' : 'none';
+}
+async function submitBatchCredits(){
+  const memberIds = [...batchCreditSelectedMembers];
+  if(memberIds.length===0){ showToast('請至少選擇一位學員'); return; }
+  const amount = Number(document.getElementById('bcAmount').value);
+  if(!amount || amount<=0){ showToast('請輸入正確的堂數'); return; }
+  const expiryType = document.getElementById('bcExpiryType').value;
+
+  let expiresAt = null;
+  if(expiryType==='date'){
+    const val = document.getElementById('bcExpiryDate').value;
+    if(!val){ showToast('請選擇到期日'); return; }
+    expiresAt = val;
+  } else if(expiryType==='days'){
+    const days = Number(document.getElementById('bcExpiryDays').value);
+    if(!days || days<=0){ showToast('請輸入正確的天數'); return; }
+    expiresAt = todayISO(days);
+  }
+
+  for(const lineUserId of memberIds){
+    await addCreditsToBatch(lineUserId, amount, expiresAt);
+    const m = data.members.find(x=>x.line_user_id===lineUserId);
+    const newRemaining = (m ? m.remaining_credits : 0) + amount;
+    const newTotal = (m ? m.total_credits : 0) + amount;
+    await db.from('members').update({ remaining_credits:newRemaining, total_credits:newTotal }).eq('line_user_id', lineUserId);
+    if(m){ m.remaining_credits = newRemaining; m.total_credits = newTotal; }
+  }
+
+  batchCreditSelectedMembers.clear();
+  render();
+  showToast(`已幫 ${memberIds.length} 位學員新增 ${amount} 堂${expiresAt ? '，效期至 '+expiresAt : '（永久有效）'}`);
+}
+
 function sortColumn(col){
   if(memberSortBy === col+'_asc') memberSortBy = col+'_desc';
   else if(memberSortBy === col+'_desc') memberSortBy = 'default';
@@ -858,42 +1089,6 @@ function sortArrow(col){
   if(memberSortBy===col+'_asc') return '<span style="color:var(--sage-dark);">▲</span>';
   if(memberSortBy===col+'_desc') return '<span style="color:var(--sage-dark);">▼</span>';
   return '<span style="color:var(--muted);opacity:.5;">↕</span>';
-}
-
-function toggleInlineBatchForm(lineUserId){
-  expandedBatchMemberId = (expandedBatchMemberId===lineUserId) ? null : lineUserId;
-  render();
-}
-function onInlineExpiryTypeChange(val){
-  document.getElementById('ilCbDateField').style.display = val==='date' ? 'flex' : 'none';
-  document.getElementById('ilCbDaysField').style.display = val==='days' ? 'flex' : 'none';
-}
-async function addBatchInline(lineUserId){
-  const amount = Number(document.getElementById('ilCbAmount').value);
-  if(!amount || amount<=0){ showToast('請輸入正確的堂數'); return; }
-  const expiryType = document.getElementById('ilCbExpiryType').value;
-
-  let expiresAt = null;
-  if(expiryType==='date'){
-    const val = document.getElementById('ilCbExpiryDate').value;
-    if(!val){ showToast('請選擇到期日'); return; }
-    expiresAt = val;
-  } else if(expiryType==='days'){
-    const days = Number(document.getElementById('ilCbExpiryDays').value);
-    if(!days || days<=0){ showToast('請輸入正確的天數'); return; }
-    expiresAt = todayISO(days);
-  }
-
-  await addCreditsToBatch(lineUserId, amount, expiresAt);
-  const m = data.members.find(x=>x.line_user_id===lineUserId);
-  const newRemaining = (m ? m.remaining_credits : 0) + amount;
-  const newTotal = (m ? m.total_credits : 0) + amount;
-  await db.from('members').update({ remaining_credits: newRemaining, total_credits: newTotal }).eq('line_user_id', lineUserId);
-  if(m){ m.remaining_credits = newRemaining; m.total_credits = newTotal; }
-
-  expandedBatchMemberId = null;
-  render();
-  showToast(`已新增 ${amount} 堂${expiresAt ? '，效期至 '+expiresAt : '（永久有效）'}`);
 }
 
 function pageMembers(){
@@ -911,15 +1106,17 @@ function pageMembers(){
   else if(memberSortBy==='tag_asc') list = [...list].sort((a,b)=>((a.tags&&a.tags[0])||'').localeCompare((b.tags&&b.tags[0])||''));
   else if(memberSortBy==='tag_desc') list = [...list].sort((a,b)=>((b.tags&&b.tags[0])||'').localeCompare((a.tags&&a.tags[0])||''));
 
+  const availableTags = data.store.available_tags || [];
+
   const rows = list.map(m=>{
     const avatar = m.picture_url
       ? `<img src="${m.picture_url}" class="avatar-sm" style="object-fit:cover;">`
       : `<span class="avatar-sm">${(m.display_name||'?')[0]}</span>`;
     const recentCount = memberStatsCounts[m.line_user_id] || 0;
-    const isExpanded = expandedBatchMemberId === m.line_user_id;
     const isTagExpanded = expandedTagMemberId === m.line_user_id;
     const tags = Array.isArray(m.tags) ? m.tags : [];
     const tagChips = tags.map(t=>`<span class="tag on" style="margin:1px 3px 1px 0;display:inline-block;">${t}</span>`).join('') || '<span style="color:var(--muted);font-size:12px;">—</span>';
+    const selectableTags = availableTags.filter(t=>!tags.includes(t));
 
     const tagEditor = !isTagExpanded ? '' : `
     <tr>
@@ -929,33 +1126,11 @@ function pageMembers(){
             ${tags.map(t=>`<span class="tag on" style="display:inline-flex;align-items:center;gap:5px;">${t}<span style="cursor:pointer;font-weight:700;" onclick="removeMemberTag('${m.line_user_id}','${t}')">✕</span></span>`).join('') || '<span style="color:var(--muted);font-size:12px;">目前沒有標籤</span>'}
           </div>
           <div style="display:flex;gap:8px;">
-            <input type="text" id="newTagInput-${m.line_user_id}" placeholder="輸入新標籤，例如：期班A" style="flex:1;border:1px solid var(--line);border-radius:8px;padding:7px 10px;font-size:13px;" onkeydown="if(event.key==='Enter') addMemberTag('${m.line_user_id}')">
-            <button class="btn btn-primary btn-sm" onclick="addMemberTag('${m.line_user_id}')">＋ 新增標籤</button>
+            <select id="tagSelect-${m.line_user_id}" style="flex:1;border:1px solid var(--line);border-radius:8px;padding:7px 10px;font-size:13px;">
+              ${selectableTags.length ? selectableTags.map(t=>`<option value="${t}">${t}</option>`).join('') : '<option value="">（沒有可加的標籤，請先在上方「標籤管理」新增）</option>'}
+            </select>
+            <button class="btn btn-primary btn-sm" onclick="addMemberTagFromSelect('${m.line_user_id}')">＋ 加上這個標籤</button>
             <button class="btn btn-ghost btn-sm" onclick="toggleTagEditor('${m.line_user_id}')">收起</button>
-          </div>
-        </div>
-      </td>
-    </tr>`;
-
-    const inlineForm = !isExpanded ? '' : `
-    <tr>
-      <td colspan="5" style="background:var(--paper);">
-        <div style="padding:12px 6px;">
-          <div class="form-grid">
-            <div class="field"><label>堂數</label><input id="ilCbAmount" type="number" value="10" min="1"></div>
-            <div class="field"><label>效期方式</label>
-              <select id="ilCbExpiryType" onchange="onInlineExpiryTypeChange(this.value)">
-                <option value="none">不設效期（永久有效）</option>
-                <option value="date">指定到期日</option>
-                <option value="days">幾天後到期</option>
-              </select>
-            </div>
-            <div class="field" id="ilCbDateField" style="display:none;"><label>到期日</label><input id="ilCbExpiryDate" type="date"></div>
-            <div class="field" id="ilCbDaysField" style="display:none;"><label>幾天後到期</label><input id="ilCbExpiryDays" type="number" value="30" min="1"></div>
-          </div>
-          <div style="display:flex;gap:8px;margin-top:10px;justify-content:flex-end;">
-            <button class="btn btn-ghost btn-sm" onclick="toggleInlineBatchForm('${m.line_user_id}')">取消</button>
-            <button class="btn btn-primary btn-sm" onclick="addBatchInline('${m.line_user_id}')">確認新增這批堂數</button>
           </div>
         </div>
       </td>
@@ -973,17 +1148,77 @@ function pageMembers(){
           <button class="btn btn-ghost btn-sm" onclick="toggleTagEditor('${m.line_user_id}')">${isTagExpanded?'收起標籤':'🏷️ 標籤'}</button>
           <button class="btn btn-ghost btn-sm" onclick="adjustMember('${m.line_user_id}', 1)">＋1</button>
           <button class="btn btn-ghost btn-sm" onclick="adjustMember('${m.line_user_id}', -1)">－1</button>
-          <button class="btn btn-primary btn-sm" onclick="toggleInlineBatchForm('${m.line_user_id}')">${isExpanded?'收起':'＋加一批'}</button>
           <input type="number" id="setCredits-${m.line_user_id}" placeholder="輸入數字" style="width:70px;border:1px solid var(--line);border-radius:8px;padding:5px 8px;font-size:12.5px;">
           <button class="btn btn-primary btn-sm" onclick="setMemberCredits('${m.line_user_id}')">設定</button>
         </div>
       </td>
-    </tr>${tagEditor}${inlineForm}`;
+    </tr>${tagEditor}`;
+  }).join('');
+
+  const creditList = data.members.filter(m=>
+    (!batchCreditTagFilter || (m.tags||[]).includes(batchCreditTagFilter)) &&
+    (!batchCreditSearchQuery || (m.display_name||'').toLowerCase().includes(batchCreditSearchQuery.toLowerCase()))
+  );
+  const creditMemberRows = creditList.map(m=>{
+    const checked = batchCreditSelectedMembers.has(m.line_user_id);
+    const tagsHtml = (m.tags||[]).map(t=>`<span class="tag on" style="margin-left:4px;">${t}</span>`).join('');
+    return `
+    <label style="display:flex;align-items:center;gap:10px;padding:8px 6px;border-bottom:1px solid var(--line);cursor:pointer;">
+      <input type="checkbox" ${checked?'checked':''} onchange="toggleBatchCreditMember('${m.line_user_id}', this.checked)" style="width:16px;height:16px;">
+      <span>${m.display_name||'（尚未取得姓名）'}</span>
+      ${tagsHtml}
+      <span style="margin-left:auto;font-size:12px;color:var(--muted);">剩 ${m.remaining_credits} 堂</span>
+    </label>`;
   }).join('');
 
   return `
     <div class="page-title">學員管理</div>
-    <div class="page-sub">學員會在<b>第一次透過 LINE 打開預約頁面後</b>自動出現在這份名單裡，你不需要手動新增。點「查看／管理」可以看到選課歷史、堂數批次明細；點「＋加一批」可以直接在這裡幫學員新增一批有效期限的堂數。</div>
+    <div class="page-sub">學員會在<b>第一次透過 LINE 打開預約頁面後</b>自動出現在這份名單裡，你不需要手動新增。點「查看／管理」可以看到選課歷史、堂數批次明細。</div>
+
+    <div class="panel">
+      <div class="panel-head"><h3>標籤管理</h3></div>
+      <div class="panel-body">
+        <div class="desc" style="margin-bottom:10px;">先在這裡建立標籤（例如：期班A、體驗、週四晚班），之後幫學員加標籤、或篩選學員時，就能直接用下拉選單選，不用每次手打。</div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;">
+          ${availableTags.map(t=>`<span class="tag on" style="display:inline-flex;align-items:center;gap:5px;">${t}<span style="cursor:pointer;font-weight:700;" onclick="removeAvailableTag('${t}')">✕</span></span>`).join('') || '<span style="color:var(--muted);font-size:12px;">尚未建立任何標籤</span>'}
+        </div>
+        <div style="display:flex;gap:8px;">
+          <input type="text" id="newAvailableTagInput" placeholder="輸入新標籤，例如：週四晚班" style="flex:1;border:1px solid var(--line);border-radius:8px;padding:8px 12px;font-size:13px;" onkeydown="if(event.key==='Enter') addAvailableTag()">
+          <button class="btn btn-primary btn-sm" onclick="addAvailableTag()">＋ 新增標籤</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h3>批次加堂數</h3></div>
+      <div class="panel-body" style="display:flex;flex-wrap:wrap;gap:10px;">
+        <select onchange="onBatchCreditTagFilter(this.value)" style="border:1px solid var(--line);border-radius:8px;padding:8px 12px;font-size:13px;">
+          <option value="">全部標籤</option>
+          ${availableTags.map(t=>`<option value="${t}" ${batchCreditTagFilter===t?'selected':''}>${t}</option>`).join('')}
+        </select>
+        <input type="text" placeholder="搜尋姓名..." value="${batchCreditSearchQuery}" oninput="onBatchCreditSearch(this.value)" style="flex:1;min-width:160px;border:1px solid var(--line);border-radius:8px;padding:8px 12px;font-size:13px;">
+        <button class="btn btn-ghost btn-sm" onclick='toggleBatchCreditSelectAll(${JSON.stringify(creditList.map(m=>({line_user_id:m.line_user_id})))})'>全選／取消全選（篩選結果）</button>
+      </div>
+      <div class="panel-body pad0" style="max-height:280px;overflow-y:auto;">
+        ${creditMemberRows || '<div style="text-align:center;color:var(--muted);padding:20px;">找不到符合的學員</div>'}
+      </div>
+      <div class="panel-body">
+        <div class="desc" style="margin-bottom:10px;">已選擇 <b>${batchCreditSelectedMembers.size}</b> 位學員，以下設定會套用到每一位選中的學員。</div>
+        <div class="form-grid">
+          <div class="field"><label>堂數</label><input id="bcAmount" type="number" value="10" min="1"></div>
+          <div class="field"><label>效期方式</label>
+            <select id="bcExpiryType" onchange="onBatchCreditExpiryTypeChange(this.value)">
+              <option value="none">不設效期（永久有效）</option>
+              <option value="date">指定到期日</option>
+              <option value="days">幾天後到期</option>
+            </select>
+          </div>
+          <div class="field" id="bcDateField" style="display:none;"><label>到期日</label><input id="bcExpiryDate" type="date"></div>
+          <div class="field" id="bcDaysField" style="display:none;"><label>幾天後到期</label><input id="bcExpiryDays" type="number" value="30" min="1"></div>
+        </div>
+      </div>
+      <div class="add-bar"><button class="btn btn-primary" onclick="submitBatchCredits()">＋ 幫選好的學員新增這批堂數</button></div>
+    </div>
 
     <div class="panel">
       <div class="panel-head"><h3>近期預約堂數統計</h3></div>
@@ -1117,39 +1352,6 @@ async function setMemberCredits(lineUserId){
   m.remaining_credits = val;
   render();
   showToast(`已將堂數設定為 ${val} 堂`);
-}
-
-function onExpiryTypeChange(val){
-  document.getElementById('cbDateField').style.display = val==='date' ? 'flex' : 'none';
-  document.getElementById('cbDaysField').style.display = val==='days' ? 'flex' : 'none';
-}
-
-async function addBatchForMember(lineUserId){
-  const amount = Number(document.getElementById('cbAmount').value);
-  if(!amount || amount<=0){ showToast('請輸入正確的堂數'); return; }
-  const expiryType = document.getElementById('cbExpiryType').value;
-
-  let expiresAt = null;
-  if(expiryType==='date'){
-    const val = document.getElementById('cbExpiryDate').value;
-    if(!val){ showToast('請選擇到期日'); return; }
-    expiresAt = val;
-  } else if(expiryType==='days'){
-    const days = Number(document.getElementById('cbExpiryDays').value);
-    if(!days || days<=0){ showToast('請輸入正確的天數'); return; }
-    expiresAt = todayISO(days);
-  }
-
-  await addCreditsToBatch(lineUserId, amount, expiresAt);
-  const m = data.members.find(x=>x.line_user_id===lineUserId);
-  const newRemaining = (m ? m.remaining_credits : 0) + amount;
-  const newTotal = (m ? m.total_credits : 0) + amount;
-  await db.from('members').update({ remaining_credits: newRemaining, total_credits: newTotal }).eq('line_user_id', lineUserId);
-  if(m){ m.remaining_credits = newRemaining; m.total_credits = newTotal; }
-
-  await loadMemberBatches(lineUserId);
-  render();
-  showToast(`已新增 ${amount} 堂${expiresAt ? '，效期至 '+expiresAt : '（永久有效）'}`);
 }
 
 async function openMemberDetail(lineUserId){
@@ -1356,27 +1558,7 @@ function pageMemberDetail(){
       ${m.picture_url ? `<img src="${m.picture_url}" style="width:34px;height:34px;border-radius:50%;object-fit:cover;">` : ''}
       ${m.display_name || '（未知學員）'}
     </div>
-    <div class="page-sub">目前剩餘堂數：<b>${m.remaining_credits}</b> 堂</div>
-
-    <div class="panel">
-      <div class="panel-head"><h3>新增一批堂數</h3></div>
-      <div class="panel-body">
-        <div class="hint-box">💡 每一批堂數可以設定自己的效期，用完或過期不會影響其他批次。</div>
-        <div class="form-grid">
-          <div class="field"><label>堂數</label><input id="cbAmount" type="number" value="10" min="1"></div>
-          <div class="field"><label>效期方式</label>
-            <select id="cbExpiryType" onchange="onExpiryTypeChange(this.value)">
-              <option value="none">不設效期（永久有效）</option>
-              <option value="date">指定到期日</option>
-              <option value="days">幾天後到期</option>
-            </select>
-          </div>
-          <div class="field" id="cbDateField" style="display:none;"><label>到期日</label><input id="cbExpiryDate" type="date"></div>
-          <div class="field" id="cbDaysField" style="display:none;"><label>幾天後到期</label><input id="cbExpiryDays" type="number" value="30" min="1"></div>
-        </div>
-      </div>
-      <div class="add-bar"><button class="btn btn-primary" onclick="addBatchForMember('${m.line_user_id}')">＋ 新增這批堂數</button></div>
-    </div>
+    <div class="page-sub">目前剩餘堂數：<b>${m.remaining_credits}</b> 堂　（要加堂數請回「學員管理」頁面上方的「批次加堂數」）</div>
 
     <div class="panel">
       <div class="panel-head"><h3>目前的堂數批次</h3></div>
