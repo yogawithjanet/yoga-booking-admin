@@ -158,7 +158,12 @@
 </style>
 </head>
 <body>
-<div id="loginScreen">
+<div id="bootLoading" style="position:fixed;inset:0;background:var(--sage-dark);display:flex;align-items:center;justify-content:center;z-index:200;">
+  <div style="width:32px;height:32px;border-radius:50%;border:3px solid rgba(255,255,255,.25);border-top-color:#fff;animation:bootspin .8s linear infinite;"></div>
+</div>
+<style>@keyframes bootspin{to{transform:rotate(360deg);}}</style>
+
+<div id="loginScreen" style="display:none;">
   <div class="login-box" id="loginBox">
     <div class="lock-ic">🔒</div>
     <h2>後台管理登入</h2>
@@ -204,6 +209,7 @@
     <div class="nav-item" data-page="teachers"><span class="ic">🧑‍🏫</span>老師管理</div>
     <div class="nav-item" data-page="notify"><span class="ic">🔔</span>通知設定</div>
     <div class="nav-item" data-page="members"><span class="ic">👥</span>學員管理</div>
+    <div class="nav-item" data-page="batchbook"><span class="ic">✅</span>批次選課</div>
     <div class="sidebar-bottom"><span class="logout-link" onclick="logout()">🚪 登出</span></div>
   </div>
 
@@ -410,6 +416,7 @@ function pageClasses(){
               ${WEEKDAYS.map(w=>`<div class="wd-chip ${selectedDays.includes(w)?'on':''}" data-w="${w}" onclick="this.classList.toggle('on')">${w}</div>`).join('')}
             </div>
           </div>
+          <div class="field" style="grid-column:1/-1;"><label>課程介紹（學生預約時可以點開查看，選填）</label><textarea id="ncDescription" style="min-height:70px;">${editing ? (editing.description||'') : ''}</textarea></div>
         </div>
       </div>
       <div class="add-bar">
@@ -444,6 +451,7 @@ function pageClasses(){
                 <input id="ovExtraTime" type="time" value="10:00" style="flex:1;">
                 <input id="ovExtraCap" type="number" value="12" placeholder="人數上限" style="width:80px;">
               </div>
+              <textarea id="ovExtraDescription" placeholder="課程介紹（選填）" style="min-height:50px;"></textarea>
               <button class="btn btn-primary btn-sm" onclick="addExtraOverride()">這天加開這堂課</button>
             </div>
           </div>
@@ -513,19 +521,20 @@ async function saveClassForm(){
   const duration = Number(document.getElementById('ncDuration').value)||60;
   const cap = Number(document.getElementById('ncCap').value)||10;
   const weekdays = [...document.querySelectorAll('#ncDays .wd-chip.on')].map(el=>el.dataset.w);
+  const description = document.getElementById('ncDescription').value.trim();
   if(!title){ showToast('請輸入課程名稱'); return; }
   if(weekdays.length===0){ showToast('請至少選擇一個上課星期'); return; }
   if(!teacher){ showToast('請先在「老師管理」新增至少一位老師'); return; }
 
   if(editingClassId){
-    const { error } = await db.from('class_templates').update({ title, teacher, time, duration, cap, weekdays }).eq('id', editingClassId);
+    const { error } = await db.from('class_templates').update({ title, teacher, time, duration, cap, weekdays, description }).eq('id', editingClassId);
     if(error){ showToast('儲存失敗，請稍後再試'); console.error(error); return; }
     editingClassId = null;
     await loadAdminState();
     showToast('已儲存修改');
     render();
   } else {
-    const { error } = await db.from('class_templates').insert({ title, teacher, time, duration, cap, weekdays, active:true });
+    const { error } = await db.from('class_templates').insert({ title, teacher, time, duration, cap, weekdays, description, active:true });
     if(error){ showToast('新增失敗，請稍後再試'); console.error(error); return; }
     await loadAdminState();
     showToast('已新增課程範本，將自動套用到未來課表');
@@ -555,9 +564,10 @@ async function addExtraOverride(){
   const teacher = document.getElementById('ovExtraTeacher').value;
   const time = document.getElementById('ovExtraTime').value;
   const cap = Number(document.getElementById('ovExtraCap').value)||12;
+  const description = document.getElementById('ovExtraDescription').value.trim();
   if(!title){ showToast('請輸入課程名稱'); return; }
   if(!teacher){ showToast('請先在「老師管理」新增至少一位老師'); return; }
-  const { error } = await db.from('class_overrides').insert({ type:'extra', date:dayOverrideDate, title, teacher, time, duration:60, cap });
+  const { error } = await db.from('class_overrides').insert({ type:'extra', date:dayOverrideDate, title, teacher, time, duration:60, cap, description });
   if(error){ showToast('新增失敗'); console.error(error); return; }
   await loadDayOverrides();
   render();
@@ -808,6 +818,35 @@ async function updateNotify(key, val){
 
 /* ================= 學員管理 ================= */
 let expandedBatchMemberId = null; // 目前展開「新增一批堂數」表單的學員
+let expandedTagMemberId = null;   // 目前展開「標籤編輯」的學員
+
+function toggleTagEditor(lineUserId){
+  expandedTagMemberId = (expandedTagMemberId===lineUserId) ? null : lineUserId;
+  render();
+}
+async function addMemberTag(lineUserId){
+  const input = document.getElementById(`newTagInput-${lineUserId}`);
+  const tag = input.value.trim();
+  if(!tag){ showToast('請輸入標籤文字'); return; }
+  const m = data.members.find(x=>x.line_user_id===lineUserId);
+  if(!m) return;
+  const tags = Array.isArray(m.tags) ? m.tags : [];
+  if(tags.includes(tag)){ showToast('這個標籤已經加過了'); return; }
+  const newTags = [...tags, tag];
+  const { error } = await db.from('members').update({ tags:newTags }).eq('line_user_id', lineUserId);
+  if(error){ showToast('新增失敗'); console.error(error); return; }
+  m.tags = newTags;
+  render();
+}
+async function removeMemberTag(lineUserId, tag){
+  const m = data.members.find(x=>x.line_user_id===lineUserId);
+  if(!m) return;
+  const newTags = (m.tags||[]).filter(t=>t!==tag);
+  const { error } = await db.from('members').update({ tags:newTags }).eq('line_user_id', lineUserId);
+  if(error){ showToast('移除失敗'); console.error(error); return; }
+  m.tags = newTags;
+  render();
+}
 
 function sortColumn(col){
   if(memberSortBy === col+'_asc') memberSortBy = col+'_desc';
@@ -869,6 +908,8 @@ function pageMembers(){
   else if(memberSortBy==='credits_desc') list = [...list].sort((a,b)=>b.remaining_credits-a.remaining_credits);
   else if(memberSortBy==='recent_asc') list = [...list].sort((a,b)=>(memberStatsCounts[a.line_user_id]||0)-(memberStatsCounts[b.line_user_id]||0));
   else if(memberSortBy==='recent_desc') list = [...list].sort((a,b)=>(memberStatsCounts[b.line_user_id]||0)-(memberStatsCounts[a.line_user_id]||0));
+  else if(memberSortBy==='tag_asc') list = [...list].sort((a,b)=>((a.tags&&a.tags[0])||'').localeCompare((b.tags&&b.tags[0])||''));
+  else if(memberSortBy==='tag_desc') list = [...list].sort((a,b)=>((b.tags&&b.tags[0])||'').localeCompare((a.tags&&a.tags[0])||''));
 
   const rows = list.map(m=>{
     const avatar = m.picture_url
@@ -876,10 +917,29 @@ function pageMembers(){
       : `<span class="avatar-sm">${(m.display_name||'?')[0]}</span>`;
     const recentCount = memberStatsCounts[m.line_user_id] || 0;
     const isExpanded = expandedBatchMemberId === m.line_user_id;
+    const isTagExpanded = expandedTagMemberId === m.line_user_id;
+    const tags = Array.isArray(m.tags) ? m.tags : [];
+    const tagChips = tags.map(t=>`<span class="tag on" style="margin:1px 3px 1px 0;display:inline-block;">${t}</span>`).join('') || '<span style="color:var(--muted);font-size:12px;">—</span>';
+
+    const tagEditor = !isTagExpanded ? '' : `
+    <tr>
+      <td colspan="5" style="background:var(--paper);">
+        <div style="padding:12px 6px;">
+          <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;">
+            ${tags.map(t=>`<span class="tag on" style="display:inline-flex;align-items:center;gap:5px;">${t}<span style="cursor:pointer;font-weight:700;" onclick="removeMemberTag('${m.line_user_id}','${t}')">✕</span></span>`).join('') || '<span style="color:var(--muted);font-size:12px;">目前沒有標籤</span>'}
+          </div>
+          <div style="display:flex;gap:8px;">
+            <input type="text" id="newTagInput-${m.line_user_id}" placeholder="輸入新標籤，例如：期班A" style="flex:1;border:1px solid var(--line);border-radius:8px;padding:7px 10px;font-size:13px;" onkeydown="if(event.key==='Enter') addMemberTag('${m.line_user_id}')">
+            <button class="btn btn-primary btn-sm" onclick="addMemberTag('${m.line_user_id}')">＋ 新增標籤</button>
+            <button class="btn btn-ghost btn-sm" onclick="toggleTagEditor('${m.line_user_id}')">收起</button>
+          </div>
+        </div>
+      </td>
+    </tr>`;
 
     const inlineForm = !isExpanded ? '' : `
     <tr>
-      <td colspan="4" style="background:var(--paper);">
+      <td colspan="5" style="background:var(--paper);">
         <div style="padding:12px 6px;">
           <div class="form-grid">
             <div class="field"><label>堂數</label><input id="ilCbAmount" type="number" value="10" min="1"></div>
@@ -904,11 +964,13 @@ function pageMembers(){
     return `
     <tr>
       <td>${avatar}${m.display_name||'（尚未取得姓名）'}</td>
+      <td>${tagChips}</td>
       <td><b>${m.remaining_credits}</b> 堂</td>
       <td>${recentCount} 堂</td>
       <td>
         <div class="row-actions" style="flex-wrap:wrap;justify-content:flex-end;">
           <button class="btn btn-ghost btn-sm" onclick="openMemberDetail('${m.line_user_id}')">查看／管理</button>
+          <button class="btn btn-ghost btn-sm" onclick="toggleTagEditor('${m.line_user_id}')">${isTagExpanded?'收起標籤':'🏷️ 標籤'}</button>
           <button class="btn btn-ghost btn-sm" onclick="adjustMember('${m.line_user_id}', 1)">＋1</button>
           <button class="btn btn-ghost btn-sm" onclick="adjustMember('${m.line_user_id}', -1)">－1</button>
           <button class="btn btn-primary btn-sm" onclick="toggleInlineBatchForm('${m.line_user_id}')">${isExpanded?'收起':'＋加一批'}</button>
@@ -916,7 +978,7 @@ function pageMembers(){
           <button class="btn btn-primary btn-sm" onclick="setMemberCredits('${m.line_user_id}')">設定</button>
         </div>
       </td>
-    </tr>${inlineForm}`;
+    </tr>${tagEditor}${inlineForm}`;
   }).join('');
 
   return `
@@ -949,11 +1011,12 @@ function pageMembers(){
       <div class="panel-body pad0">
         <table><thead><tr>
           <th style="cursor:pointer;user-select:none;" onclick="sortColumn('name')">學員 ${sortArrow('name')}</th>
+          <th style="cursor:pointer;user-select:none;" onclick="sortColumn('tag')">標籤 ${sortArrow('tag')}</th>
           <th style="cursor:pointer;user-select:none;" onclick="sortColumn('credits')">剩餘堂數 ${sortArrow('credits')}</th>
           <th style="cursor:pointer;user-select:none;" onclick="sortColumn('recent')">近期預約 ${sortArrow('recent')}</th>
           <th></th>
         </tr></thead>
-        <tbody>${rows || '<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:20px;">找不到符合的學員</td></tr>'}</tbody></table>
+        <tbody>${rows || '<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:20px;">找不到符合的學員</td></tr>'}</tbody></table>
       </div>
     </div>`;
 }
@@ -1126,7 +1189,7 @@ function pageMemberDetail(){
     </tr>`;
   }).join('');
 
-  // 給「幫學員新增預約」用的選單：固定課程範本 + 單日加開的特別課
+function getClassOptionsHtml(){
   const templateOptions = data.classes.filter(c=>c.active).map(c=>
     `<option value="t:${c.id}">${c.title}（${c.teacher} ${c.time}，每週${(c.weekdays||[]).join('')}）</option>`
   ).join('');
@@ -1134,7 +1197,156 @@ function pageMemberDetail(){
   const extraOptions = dayOverrides.filter(o=>o.type==='extra' && o.date>=todayStr).map(o=>
     `<option value="e:${o.id}">⭐ ${o.date} ${o.time} ${o.title}（${o.teacher}，特別課）</option>`
   ).join('');
-  const allOptions = templateOptions + extraOptions;
+  return templateOptions + extraOptions;
+}
+
+/* ================= 批次選課 ================= */
+let batchSelectedMembers = new Set();
+let batchTagFilter = '';
+let batchSearchQuery = '';
+
+function toggleBatchMember(lineUserId, checked){
+  if(checked) batchSelectedMembers.add(lineUserId);
+  else batchSelectedMembers.delete(lineUserId);
+  render();
+}
+function toggleBatchSelectAll(list){
+  const allSelected = list.every(m=>batchSelectedMembers.has(m.line_user_id));
+  if(allSelected) list.forEach(m=>batchSelectedMembers.delete(m.line_user_id));
+  else list.forEach(m=>batchSelectedMembers.add(m.line_user_id));
+  render();
+}
+function onBatchTagFilter(val){ batchTagFilter = val; render(); }
+function onBatchSearch(val){ batchSearchQuery = val; render(); }
+
+function pageBatchBooking(){
+  const allTags = [...new Set(data.members.flatMap(m=>m.tags||[]))].sort();
+  let list = data.members.filter(m=>
+    (!batchTagFilter || (m.tags||[]).includes(batchTagFilter)) &&
+    (!batchSearchQuery || (m.display_name||'').toLowerCase().includes(batchSearchQuery.toLowerCase()))
+  );
+
+  const memberRows = list.map(m=>{
+    const checked = batchSelectedMembers.has(m.line_user_id);
+    const tags = (m.tags||[]).map(t=>`<span class="tag on" style="margin-left:4px;">${t}</span>`).join('');
+    return `
+    <label style="display:flex;align-items:center;gap:10px;padding:8px 6px;border-bottom:1px solid var(--line);cursor:pointer;">
+      <input type="checkbox" ${checked?'checked':''} onchange="toggleBatchMember('${m.line_user_id}', this.checked)" style="width:16px;height:16px;">
+      <span>${m.display_name||'（尚未取得姓名）'}</span>
+      ${tags}
+      <span style="margin-left:auto;font-size:12px;color:var(--muted);">剩 ${m.remaining_credits} 堂</span>
+    </label>`;
+  }).join('');
+
+  return `
+    <div class="page-title">批次選課</div>
+    <div class="page-sub">一次幫多位學員新增同一堂課的預約，很適合期班整班登記，或用標籤快速篩選出某個班級的學生。</div>
+
+    <div class="panel">
+      <div class="panel-head"><h3>1. 選擇學員</h3></div>
+      <div class="panel-body" style="display:flex;flex-wrap:wrap;gap:10px;">
+        <select onchange="onBatchTagFilter(this.value)" style="border:1px solid var(--line);border-radius:8px;padding:8px 12px;font-size:13px;">
+          <option value="">全部標籤</option>
+          ${allTags.map(t=>`<option value="${t}" ${batchTagFilter===t?'selected':''}>${t}</option>`).join('')}
+        </select>
+        <input type="text" placeholder="搜尋姓名..." value="${batchSearchQuery}" oninput="onBatchSearch(this.value)" style="flex:1;min-width:160px;border:1px solid var(--line);border-radius:8px;padding:8px 12px;font-size:13px;">
+        <button class="btn btn-ghost btn-sm" onclick='toggleBatchSelectAll(${JSON.stringify(list.map(m=>({line_user_id:m.line_user_id})))})'>全選／取消全選（篩選結果）</button>
+      </div>
+      <div class="panel-body pad0" style="max-height:340px;overflow-y:auto;">
+        ${memberRows || '<div style="text-align:center;color:var(--muted);padding:20px;">找不到符合的學員</div>'}
+      </div>
+      <div class="panel-body" style="padding-top:0;">
+        <div class="desc">已選擇 <b>${batchSelectedMembers.size}</b> 位學員</div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h3>2. 選擇課程與日期</h3></div>
+      <div class="panel-body">
+        <div class="form-grid">
+          <div class="field" style="grid-column:1/-1;">
+            <label>上課日期（可多選，僅固定課程需要；特別課會忽略此欄）</label>
+            <div id="bbDatesContainer">
+              <div class="date-row" style="display:flex;gap:6px;margin-bottom:6px;">
+                <input type="date" class="bbDateInput" style="flex:1;border:1px solid var(--line);border-radius:9px;padding:9px 11px;font-size:13px;background:var(--paper);color:var(--ink);">
+                <button type="button" class="btn btn-ghost btn-sm" onclick="removeBbDateRow(this)">✕</button>
+              </div>
+            </div>
+            <button type="button" class="btn btn-ghost btn-sm" onclick="addBbDateRow()">＋ 新增一個日期</button>
+          </div>
+          <div class="field"><label>課程</label><select id="bbClass">${getClassOptionsHtml() || '<option value="">尚無課程可選</option>'}</select></div>
+        </div>
+      </div>
+      <div class="add-bar"><button class="btn btn-primary" onclick="submitBatchBooking()">＋ 幫選好的學員新增這些預約</button></div>
+    </div>`;
+}
+
+function addBbDateRow(){
+  const container = document.getElementById('bbDatesContainer');
+  const row = document.createElement('div');
+  row.className = 'date-row';
+  row.style.cssText = 'display:flex;gap:6px;margin-bottom:6px;';
+  row.innerHTML = `<input type="date" class="bbDateInput" style="flex:1;border:1px solid var(--line);border-radius:9px;padding:9px 11px;font-size:13px;background:var(--paper);color:var(--ink);">
+    <button type="button" class="btn btn-ghost btn-sm" onclick="removeBbDateRow(this)">✕</button>`;
+  container.appendChild(row);
+}
+function removeBbDateRow(btn){
+  const container = document.getElementById('bbDatesContainer');
+  const row = btn.closest('.date-row');
+  if(container.children.length<=1){ row.querySelector('input').value=''; return; }
+  row.remove();
+}
+
+async function submitBatchBooking(){
+  const memberIds = [...batchSelectedMembers];
+  if(memberIds.length===0){ showToast('請至少選擇一位學員'); return; }
+  const selected = document.getElementById('bbClass').value;
+  if(!selected){ showToast('請選擇課程'); return; }
+  const [type, id] = selected.split(':');
+
+  let successCount = 0;
+  const skipped = [];
+
+  if(type==='t'){
+    const tmpl = data.classes.find(c=>c.id===id);
+    if(!tmpl){ showToast('找不到課程範本'); return; }
+    const dateValues = [...document.querySelectorAll('.bbDateInput')].map(i=>i.value).filter(Boolean);
+    const uniqueDates = [...new Set(dateValues)];
+    if(uniqueDates.length===0){ showToast('請至少選擇一個日期'); return; }
+
+    for(const lineUserId of memberIds){
+      for(const dateVal of uniqueDates){
+        const wd = weekdayLabelOf(dateVal);
+        if(!(tmpl.weekdays||[]).includes(wd)){ skipped.push(`${memberName(lineUserId)} ${dateVal}`); continue; }
+        const dateKey = isoToDateKey(dateVal);
+        const ok = await insertOneBooking(lineUserId, {
+          classKey: `${dateKey}_${tmpl.id}`, classTemplateId: tmpl.id, title: tmpl.title,
+          classDate: dateKeyToLabel(dateVal), classDateIso: dateVal,
+          time: tmpl.time, teacher: tmpl.teacher, cap: tmpl.cap
+        });
+        if(ok) successCount++; else skipped.push(`${memberName(lineUserId)} ${dateVal}`);
+      }
+    }
+  } else {
+    const override = dayOverrides.find(o=>o.id===id && o.type==='extra');
+    if(!override){ showToast('找不到這堂特別課'); return; }
+    const dateKey = isoToDateKey(override.date);
+    for(const lineUserId of memberIds){
+      const ok = await insertOneBooking(lineUserId, {
+        classKey: `${dateKey}_extra_${override.id}`, classTemplateId: null, title: override.title,
+        classDate: dateKeyToLabel(override.date), classDateIso: override.date,
+        time: override.time, teacher: override.teacher, cap: override.cap
+      });
+      if(ok) successCount++; else skipped.push(`${memberName(lineUserId)}`);
+    }
+  }
+
+  await loadAdminState();
+  batchSelectedMembers.clear();
+  render();
+  if(successCount>0) showToast(`成功新增 ${successCount} 筆預約`);
+  if(skipped.length>0) showToast(`有 ${skipped.length} 筆未成功：${skipped.slice(0,3).join('、')}`);
+}
 
   return `
     <div class="page-title">
@@ -1214,7 +1426,7 @@ function pageMemberDetail(){
             </div>
             <button type="button" class="btn btn-ghost btn-sm" onclick="addDateRow()">＋ 新增一個日期</button>
           </div>
-          <div class="field"><label>課程</label><select id="adNewClass">${allOptions || '<option value="">尚無課程可選</option>'}</select></div>
+          <div class="field"><label>課程</label><select id="adNewClass">${getClassOptionsHtml() || '<option value="">尚無課程可選</option>'}</select></div>
         </div>
       </div>
       <div class="add-bar"><button class="btn btn-primary" onclick="adminAddBooking('${m.line_user_id}')">＋ 新增這些預約</button></div>
@@ -1472,26 +1684,33 @@ function pageTeacherLog(){
     </div>` : ''}`;
 }
 
-const PAGES = {overview:pageOverview, store:pageStore, classes:pageClasses, teachers:pageTeachers, notify:pageNotify, members:pageMembers, roster:pageRoster, teacherlog:pageTeacherLog};
+const PAGES = {overview:pageOverview, store:pageStore, classes:pageClasses, teachers:pageTeachers, notify:pageNotify, members:pageMembers, roster:pageRoster, teacherlog:pageTeacherLog, batchbook:pageBatchBooking};
 
 function render(){
   document.getElementById('sidebarBrand').innerHTML = data.store.name + '<span>後台管理系統</span>';
   document.getElementById('mainArea').innerHTML = PAGES[currentPage]();
 }
 
+const CURRENT_PAGE_KEY = 'admin-current-page-v1';
+
+async function navigateToPage(page){
+  document.querySelectorAll('.nav-item').forEach(i=>i.classList.remove('active'));
+  const targetItem = document.querySelector(`.nav-item[data-page="${page}"]`);
+  if(targetItem) targetItem.classList.add('active');
+  currentPage = page;
+  localStorage.setItem(CURRENT_PAGE_KEY, page); // 記住目前頁面，重新整理後可以回到同一頁
+  selectedMemberId = null; memberBookings = [];
+  editingClassId = null;
+  if(page==='classes'){ await loadDayOverrides(); }
+  if(page==='members'){ await loadMemberStats(); }
+  if(page==='roster'){ await loadRoster(); }
+  if(page==='teacherlog'){ await loadTeacherLog(teacherLogSelected || (data.teachers[0] && data.teachers[0].name) || ''); }
+  if(page==='batchbook'){ await loadDayOverrides(); batchSelectedMembers.clear(); batchTagFilter=''; batchSearchQuery=''; }
+  render();
+}
+
 document.querySelectorAll('.nav-item').forEach(item=>{
-  item.addEventListener('click', async ()=>{
-    document.querySelectorAll('.nav-item').forEach(i=>i.classList.remove('active'));
-    item.classList.add('active');
-    currentPage = item.dataset.page;
-    selectedMemberId = null; memberBookings = [];
-    editingClassId = null;
-    if(currentPage==='classes'){ await loadDayOverrides(); }
-    if(currentPage==='members'){ await loadMemberStats(); }
-    if(currentPage==='roster'){ await loadRoster(); }
-    if(currentPage==='teacherlog'){ await loadTeacherLog(teacherLogSelected || (data.teachers[0] && data.teachers[0].name) || ''); }
-    render();
-  });
+  item.addEventListener('click', ()=>{ navigateToPage(item.dataset.page); });
 });
 
 const SESSION_KEY = 'admin-logged-in-v1';
@@ -1513,6 +1732,7 @@ function tryLogin(){
 }
 function logout(){
   localStorage.removeItem(SESSION_KEY);
+  localStorage.removeItem(CURRENT_PAGE_KEY);
   document.getElementById('app').style.display = 'none';
   document.getElementById('loginScreen').style.display = 'flex';
   document.getElementById('loginPassword').value = '';
@@ -1568,12 +1788,17 @@ async function resetPasswordViaForgot(){
   }catch(e){
     console.error('讀取資料庫失敗，請確認 Supabase 資料表是否已建立：', e);
   }
+
+  document.getElementById('bootLoading').style.display = 'none';
+
   if(localStorage.getItem(SESSION_KEY) === '1'){
-    // 這台裝置先前登入過，不用再輸入密碼
+    // 這台裝置先前登入過，不用再輸入密碼，直接進畫面
     document.getElementById('loginScreen').style.display = 'none';
     document.getElementById('app').style.display = 'flex';
-    render();
+    const savedPage = localStorage.getItem(CURRENT_PAGE_KEY) || 'overview';
+    await navigateToPage(savedPage); // 回到重新整理前所在的那一頁
   } else {
+    document.getElementById('loginScreen').style.display = 'flex';
     document.getElementById('loginPassword').focus();
   }
 })();
