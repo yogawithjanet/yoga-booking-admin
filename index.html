@@ -1165,30 +1165,6 @@ async function openMemberDetail(lineUserId){
 }
 function backToMemberList(){ selectedMemberId = null; memberBookings = []; memberBatches = []; editingBatchId = null; render(); }
 
-function pageMemberDetail(){
-  const m = data.members.find(x=>x.line_user_id===selectedMemberId);
-  if(!m){ selectedMemberId = null; return pageMembers(); }
-
-  function isBookingPast(b){
-    if(!b.class_date_iso) return false;
-    const [y,mo,d] = b.class_date_iso.split('-').map(Number);
-    const [hh,mm] = (b.class_time||'00:00').split(':').map(Number);
-    return new Date(y, mo-1, d, hh, mm) <= new Date();
-  }
-
-  const historyRows = memberBookings.map(b=>{
-    const past = b.status==='active' && isBookingPast(b);
-    const statusLabel = b.status!=='active' ? '已取消' : (past ? '已結束' : '已預約');
-    const statusClass = b.status!=='active' ? 'off' : (past ? 'warn' : 'on');
-    return `
-    <tr>
-      <td>${b.class_date} ${b.class_time}</td>
-      <td>${b.class_title}（${b.teacher}）</td>
-      <td><span class="tag ${statusClass}">${statusLabel}</span></td>
-      <td>${(b.status==='active' && !past) ? `<div class="row-actions"><button class="btn btn-danger btn-sm" onclick="adminCancelBooking('${b.id}')">取消</button></div>` : ''}</td>
-    </tr>`;
-  }).join('');
-
 function getClassOptionsHtml(){
   const templateOptions = data.classes.filter(c=>c.active).map(c=>
     `<option value="t:${c.id}">${c.title}（${c.teacher} ${c.time}，每週${(c.weekdays||[]).join('')}）</option>`
@@ -1347,6 +1323,30 @@ async function submitBatchBooking(){
   if(successCount>0) showToast(`成功新增 ${successCount} 筆預約`);
   if(skipped.length>0) showToast(`有 ${skipped.length} 筆未成功：${skipped.slice(0,3).join('、')}`);
 }
+
+function pageMemberDetail(){
+  const m = data.members.find(x=>x.line_user_id===selectedMemberId);
+  if(!m){ selectedMemberId = null; return pageMembers(); }
+
+  function isBookingPast(b){
+    if(!b.class_date_iso) return false;
+    const [y,mo,d] = b.class_date_iso.split('-').map(Number);
+    const [hh,mm] = (b.class_time||'00:00').split(':').map(Number);
+    return new Date(y, mo-1, d, hh, mm) <= new Date();
+  }
+
+  const historyRows = memberBookings.map(b=>{
+    const past = b.status==='active' && isBookingPast(b);
+    const statusLabel = b.status!=='active' ? '已取消' : (past ? '已結束' : '已預約');
+    const statusClass = b.status!=='active' ? 'off' : (past ? 'warn' : 'on');
+    return `
+    <tr>
+      <td>${b.class_date} ${b.class_time}</td>
+      <td>${b.class_title}（${b.teacher}）</td>
+      <td><span class="tag ${statusClass}">${statusLabel}</span></td>
+      <td>${(b.status==='active' && !past) ? `<div class="row-actions"><button class="btn btn-danger btn-sm" onclick="adminCancelBooking('${b.id}')">取消</button></div>` : ''}</td>
+    </tr>`;
+  }).join('');
 
   return `
     <div class="page-title">
