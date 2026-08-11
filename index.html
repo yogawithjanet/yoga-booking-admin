@@ -237,7 +237,6 @@
     <div class="nav-item" data-page="classes"><span class="ic">🗓️</span>課程設定</div>
     <div class="nav-item" data-page="roster"><span class="ic">📋</span>每日名單</div>
     <div class="nav-item" data-page="members"><span class="ic">👥</span>學員管理</div>
-    <div class="nav-item" data-page="batchbook"><span class="ic">✅</span>批次選課</div>
     <div class="nav-item" data-page="teachers"><span class="ic">🧑‍🏫</span>老師管理</div>
     <div class="nav-item" data-page="teacherlog"><span class="ic">📈</span>老師教學紀錄</div>
     <div class="sidebar-bottom"><span class="logout-link" onclick="logout()">🚪 登出</span></div>
@@ -385,6 +384,18 @@ function pageOverview(){
 let editingClassId = null;
 let dayOverrides = []; // 單日停課/加課的例外清單
 let dayOverrideDate = new Date().toISOString().slice(0,10);
+let exceptionSortBy = 'date_asc';
+function sortExceptionColumn(col){
+  if(exceptionSortBy === col+'_asc') exceptionSortBy = col+'_desc';
+  else if(exceptionSortBy === col+'_desc') exceptionSortBy = 'date_asc';
+  else exceptionSortBy = col+'_asc';
+  render();
+}
+function exceptionSortArrow(col){
+  if(exceptionSortBy===col+'_asc') return '<span style="color:var(--sage-dark);">▲</span>';
+  if(exceptionSortBy===col+'_desc') return '<span style="color:var(--sage-dark);">▼</span>';
+  return '<span style="color:var(--muted);opacity:.5;">↕</span>';
+}
 
 async function loadDayOverrides(){
   const { data: rows, error } = await db.from('class_overrides').select('*').order('date');
@@ -477,6 +488,7 @@ function buildDayDetailHTML(){
     <div class="settings-row">
       <div><div class="label">${o.time}　${o.title}（${o.teacher}）</div><div class="desc">⭐ 這天加開的特別課</div></div>
       <div class="row-actions">
+        <button class="btn btn-ghost btn-sm" onclick="startEditExtraOverride('${o.id}')">編輯</button>
         <button class="btn btn-danger btn-sm" onclick="removeOverride('${o.id}')">刪除</button>
       </div>
     </div>`;
@@ -495,6 +507,8 @@ function openSingleDayFormFor(iso){
   showAddClassForm = true;
   classFormMode = 'single';
   editingClassId = null;
+  editingOverrideId = null;
+  singleDayFormPrefill = null;
   render();
   setTimeout(()=>{
     const el = document.getElementById('classFormPanel');
@@ -524,6 +538,19 @@ async function quickCancelOccurrence(iso, templateId){
   render();
   showToast('已停開這一天的課');
 }
+/* ---- 統一的「新增課程」表單模式 ---- */
+let classFormMode = 'recurring'; // 'recurring'（每週固定）| 'single'（只有這一天）
+let showAddClassForm = false;    // 表單預設收起，避免畫面太滿
+let editingOverrideId = null;    // 目前正在編輯的特別課（單日加開）id
+let singleDayFormPrefill = null; // 開啟「只有這一天」表單時，預先帶入的內容
+
+function setClassFormMode(mode){ classFormMode = mode; render(); }
+function toggleAddClassForm(){
+  showAddClassForm = !showAddClassForm;
+  if(!showAddClassForm){ editingOverrideId = null; singleDayFormPrefill = null; }
+  render();
+}
+
 async function quickEditOccurrence(iso, templateId){
   const tmpl = data.classes.find(c=>c.id===templateId);
   if(!tmpl) return;
@@ -532,25 +559,54 @@ async function quickEditOccurrence(iso, templateId){
   showAddClassForm = true;
   classFormMode = 'single';
   editingClassId = null;
+  editingOverrideId = null; // 這是新增一堂特別課，不是編輯既有的
+  singleDayFormPrefill = { title:tmpl.title, teacher:tmpl.teacher, time:tmpl.time, cap:tmpl.cap, description:tmpl.description||'' };
   render();
   setTimeout(()=>{
-    const setVal = (id, val)=>{ const el = document.getElementById(id); if(el) el.value = val; };
-    setVal('ovExtraTitle', tmpl.title);
-    setVal('ovExtraTeacher', tmpl.teacher);
-    setVal('ovExtraTime', tmpl.time);
-    setVal('ovExtraCap', tmpl.cap);
-    setVal('ovExtraDescription', tmpl.description||'');
-    const el = document.getElementById('ovExtraTitle');
+    const el = document.getElementById('classFormPanel');
     if(el) el.scrollIntoView({behavior:'smooth', block:'center'});
   }, 60);
   showToast('已停開原本這天的課，內容已幫你帶到下方表單，改完直接送出即可');
 }
 
-/* ---- 統一的「新增課程」表單模式 ---- */
-let classFormMode = 'recurring'; // 'recurring'（每週固定）| 'single'（只有這一天）
-let showAddClassForm = false;    // 表單預設收起，避免畫面太滿
-function setClassFormMode(mode){ classFormMode = mode; render(); }
-function toggleAddClassForm(){ showAddClassForm = !showAddClassForm; render(); }
+function startEditExtraOverride(id){
+  const o = dayOverrides.find(x=>x.id===id && x.type==='extra');
+  if(!o) return;
+  editingOverrideId = id;
+  dayOverrideDate = o.date;
+  singleDayFormPrefill = { title:o.title, teacher:o.teacher, time:o.time, cap:o.cap, description:o.description||'' };
+  showAddClassForm = true;
+  classFormMode = 'single';
+  editingClassId = null;
+  render();
+  setTimeout(()=>{
+    const el = document.getElementById('classFormPanel');
+    if(el) el.scrollIntoView({behavior:'smooth', block:'center'});
+  }, 60);
+}
+function cancelEditExtraOverride(){
+  editingOverrideId = null;
+  singleDayFormPrefill = null;
+  showAddClassForm = false;
+  render();
+}
+async function saveExtraOverrideEdit(){
+  const title = document.getElementById('ovExtraTitle').value.trim();
+  const teacher = document.getElementById('ovExtraTeacher').value;
+  const time = document.getElementById('ovExtraTime').value;
+  const cap = Number(document.getElementById('ovExtraCap').value)||12;
+  const description = document.getElementById('ovExtraDescription').value.trim();
+  if(!title){ showToast('請輸入課程名稱'); return; }
+  if(!teacher){ showToast('請先在「老師管理」新增至少一位老師'); return; }
+  const { error } = await db.from('class_overrides').update({ title, teacher, time, cap, description }).eq('id', editingOverrideId);
+  if(error){ showToast('儲存失敗'); console.error(error); return; }
+  editingOverrideId = null;
+  singleDayFormPrefill = null;
+  showAddClassForm = false;
+  await loadDayOverrides();
+  render();
+  showToast('已儲存修改');
+}
 
 function pageClasses(){
   const n = data.notify;
@@ -573,8 +629,8 @@ function pageClasses(){
   const selectedDays = editing ? (editing.weekdays||[]) : [];
   const formOpen = editing || showAddClassForm;
 
-  // 單日例外清單（停課＋特別課合併成一張表）
-  const exceptionRows = [
+  // 停課＆特別課清單（合併成一張表，可排序）
+  let exceptionRows = [
     ...dayOverrides.filter(o=>o.type==='cancel').map(o=>{
       const tmpl = data.classes.find(c=>c.id===o.class_template_id);
       return { date:o.date, label:`${tmpl ? tmpl.title : '（原課程已刪除）'}`, type:'停課', id:o.id, danger:false };
@@ -582,7 +638,11 @@ function pageClasses(){
     ...dayOverrides.filter(o=>o.type==='extra').map(o=>
       ({ date:o.date, label:`${o.time} ${o.title}（${o.teacher}）`, type:'特別課', id:o.id, danger:true })
     )
-  ].sort((a,b)=> a.date < b.date ? -1 : 1);
+  ];
+  if(exceptionSortBy==='date_asc') exceptionRows.sort((a,b)=> a.date<b.date?-1:(a.date>b.date?1:0));
+  else if(exceptionSortBy==='date_desc') exceptionRows.sort((a,b)=> a.date>b.date?-1:(a.date<b.date?1:0));
+  else if(exceptionSortBy==='type_asc') exceptionRows.sort((a,b)=> a.type.localeCompare(b.type));
+  else if(exceptionSortBy==='type_desc') exceptionRows.sort((a,b)=> b.type.localeCompare(a.type));
 
   return `
     <div class="page-title">課程設定</div>
@@ -602,11 +662,11 @@ function pageClasses(){
 
       ${!formOpen ? '' : `
       <div class="panel-body" id="classFormPanel" style="border-top:1px solid var(--line);">
-        ${!editing ? `
+        ${(!editing && !editingOverrideId) ? `
         <div style="display:flex;gap:8px;margin-bottom:16px;">
           <button class="btn ${classFormMode==='recurring'?'btn-primary':'btn-ghost'} btn-sm" onclick="setClassFormMode('recurring')">🔁 每週固定課程</button>
           <button class="btn ${classFormMode==='single'?'btn-primary':'btn-ghost'} btn-sm" onclick="setClassFormMode('single')">📌 只有這一天（特別課）</button>
-        </div>` : `<div class="label" style="margin-bottom:12px;">編輯課程範本</div>`}
+        </div>` : `<div class="label" style="margin-bottom:12px;">${editing ? '編輯課程範本' : '編輯特別課'}</div>`}
 
         ${(editing || classFormMode==='recurring') ? `
         <div class="form-grid">
@@ -630,17 +690,20 @@ function pageClasses(){
         </div>
         ` : `
         <div class="form-grid">
-          <div class="field"><label>日期</label><input id="ovDate" type="date" value="${dayOverrideDate}" onchange="dayOverrideDate=this.value"></div>
-          <div class="field"><label>課程名稱</label><input id="ovExtraTitle" placeholder="例如：中秋特別班"></div>
+          <div class="field"><label>日期</label><input id="ovDate" type="date" value="${dayOverrideDate}" onchange="dayOverrideDate=this.value" ${editingOverrideId?'disabled':''}></div>
+          <div class="field"><label>課程名稱</label><input id="ovExtraTitle" placeholder="例如：中秋特別班" value="${singleDayFormPrefill ? singleDayFormPrefill.title : ''}"></div>
           <div class="field"><label>授課老師</label>
-            <select id="ovExtraTeacher">${data.teachers.map(t=>`<option value="${t.name}">${t.name}</option>`).join('')}</select>
+            <select id="ovExtraTeacher">${data.teachers.map(t=>`<option value="${t.name}" ${singleDayFormPrefill && singleDayFormPrefill.teacher===t.name ? 'selected':''}>${t.name}</option>`).join('')}</select>
           </div>
-          <div class="field"><label>上課時間</label><input id="ovExtraTime" type="time" value="10:00"></div>
-          <div class="field"><label>人數上限</label><input id="ovExtraCap" type="number" value="12"></div>
-          <div class="field" style="grid-column:1/-1;"><label>課程介紹（選填）</label><textarea id="ovExtraDescription" style="min-height:60px;"></textarea></div>
+          <div class="field"><label>上課時間</label><input id="ovExtraTime" type="time" value="${singleDayFormPrefill ? singleDayFormPrefill.time : '10:00'}"></div>
+          <div class="field"><label>人數上限</label><input id="ovExtraCap" type="number" value="${singleDayFormPrefill ? singleDayFormPrefill.cap : 12}"></div>
+          <div class="field" style="grid-column:1/-1;"><label>課程介紹（選填）</label><textarea id="ovExtraDescription" style="min-height:60px;">${singleDayFormPrefill ? singleDayFormPrefill.description : ''}</textarea></div>
         </div>
         <div class="add-bar" style="padding-left:0;padding-right:0;">
-          <button class="btn btn-primary" onclick="addExtraOverride()">＋ 新增這一天的課</button>
+          ${editingOverrideId ? `
+            <button class="btn btn-ghost" onclick="cancelEditExtraOverride()" style="margin-right:8px;">取消編輯</button>
+            <button class="btn btn-primary" onclick="saveExtraOverrideEdit()">儲存修改</button>
+          ` : `<button class="btn btn-primary" onclick="addExtraOverride()">＋ 新增這一天的課</button>`}
         </div>
         `}
       </div>`}
@@ -659,9 +722,13 @@ function pageClasses(){
 
     ${exceptionRows.length ? `
     <div class="panel">
-      <div class="panel-head"><h3>單日例外清單</h3></div>
+      <div class="panel-head"><h3>停課＆特別課清單</h3></div>
       <div class="panel-body pad0">
-        <table><thead><tr><th>日期</th><th>類型</th><th>內容</th><th></th></tr></thead>
+        <table><thead><tr>
+          <th style="cursor:pointer;user-select:none;" onclick="sortExceptionColumn('date')">日期 ${exceptionSortArrow('date')}</th>
+          <th style="cursor:pointer;user-select:none;" onclick="sortExceptionColumn('type')">類型 ${exceptionSortArrow('type')}</th>
+          <th>內容</th><th></th>
+        </tr></thead>
         <tbody>${exceptionRows.map(r=>`
           <tr>
             <td>${r.date}</td>
@@ -968,9 +1035,6 @@ async function updateNotify(key, val){
 
 /* ================= 學員管理 ================= */
 let expandedTagMemberId = null;   // 目前展開「標籤編輯」的學員
-let batchCreditSelectedMembers = new Set();
-let batchCreditTagFilter = '';
-let batchCreditSearchQuery = '';
 
 function toggleTagEditor(lineUserId){
   expandedTagMemberId = (expandedTagMemberId===lineUserId) ? null : lineUserId;
@@ -1021,27 +1085,30 @@ async function removeAvailableTag(tag){
   render();
 }
 
-/* ---- 批次加堂數（可選多位學員，用標籤篩選） ---- */
-function toggleBatchCreditMember(lineUserId, checked){
-  if(checked) batchCreditSelectedMembers.add(lineUserId);
-  else batchCreditSelectedMembers.delete(lineUserId);
+/* ---- 批次操作共用的選取狀態（學員列表打勾） ---- */
+let selectedMemberIds = new Set();
+let memberTagFilter = '';
+
+function toggleMemberSelect(lineUserId, checked){
+  if(checked) selectedMemberIds.add(lineUserId);
+  else selectedMemberIds.delete(lineUserId);
   render();
 }
-function toggleBatchCreditSelectAll(list){
-  const allSelected = list.every(m=>batchCreditSelectedMembers.has(m.line_user_id));
-  if(allSelected) list.forEach(m=>batchCreditSelectedMembers.delete(m.line_user_id));
-  else list.forEach(m=>batchCreditSelectedMembers.add(m.line_user_id));
+function toggleSelectAllFiltered(list){
+  const allSelected = list.every(m=>selectedMemberIds.has(m.line_user_id));
+  if(allSelected) list.forEach(m=>selectedMemberIds.delete(m.line_user_id));
+  else list.forEach(m=>selectedMemberIds.add(m.line_user_id));
   render();
 }
-function onBatchCreditTagFilter(val){ batchCreditTagFilter = val; render(); }
-function onBatchCreditSearch(val){ batchCreditSearchQuery = val; render(); }
+function onMemberTagFilter(val){ memberTagFilter = val; render(); }
+
 function onBatchCreditExpiryTypeChange(val){
   document.getElementById('bcDateField').style.display = val==='date' ? 'flex' : 'none';
   document.getElementById('bcDaysField').style.display = val==='days' ? 'flex' : 'none';
 }
 async function submitBatchCredits(){
-  const memberIds = [...batchCreditSelectedMembers];
-  if(memberIds.length===0){ showToast('請至少選擇一位學員'); return; }
+  const memberIds = [...selectedMemberIds];
+  if(memberIds.length===0){ showToast('請先在下方學員列表勾選要處理的學員'); return; }
   const amount = Number(document.getElementById('bcAmount').value);
   if(!amount || amount<=0){ showToast('請輸入正確的堂數'); return; }
   const expiryType = document.getElementById('bcExpiryType').value;
@@ -1066,7 +1133,6 @@ async function submitBatchCredits(){
     if(m){ m.remaining_credits = newRemaining; m.total_credits = newTotal; }
   }
 
-  batchCreditSelectedMembers.clear();
   render();
   showToast(`已幫 ${memberIds.length} 位學員新增 ${amount} 堂${expiresAt ? '，效期至 '+expiresAt : '（永久有效）'}`);
 }
@@ -1087,7 +1153,8 @@ function pageMembers(){
   if(selectedMemberId) return pageMemberDetail();
 
   let list = data.members.filter(m =>
-    !memberSearchQuery || (m.display_name||'').toLowerCase().includes(memberSearchQuery.toLowerCase())
+    (!memberTagFilter || (m.tags||[]).includes(memberTagFilter)) &&
+    (!memberSearchQuery || (m.display_name||'').toLowerCase().includes(memberSearchQuery.toLowerCase()))
   );
   if(memberSortBy==='name_asc') list = [...list].sort((a,b)=>(a.display_name||'').localeCompare(b.display_name||''));
   else if(memberSortBy==='name_desc') list = [...list].sort((a,b)=>(b.display_name||'').localeCompare(a.display_name||''));
@@ -1109,6 +1176,7 @@ function pageMembers(){
     const tags = Array.isArray(m.tags) ? m.tags : [];
     const tagChips = tags.map(t=>`<span class="tag on" style="margin:1px 3px 1px 0;display:inline-block;">${t}</span>`).join('') || '<span style="color:var(--muted);font-size:12px;">＋ 新增標籤</span>';
     const selectableTags = availableTags.filter(t=>!tags.includes(t));
+    const isChecked = selectedMemberIds.has(m.line_user_id);
 
     const tagCellContent = !isTagExpanded ? tagChips : `
       <div style="display:flex;flex-wrap:wrap;align-items:center;gap:4px;" onclick="event.stopPropagation()">
@@ -1121,6 +1189,7 @@ function pageMembers(){
 
     return `
     <tr>
+      <td><input type="checkbox" ${isChecked?'checked':''} onchange="toggleMemberSelect('${m.line_user_id}', this.checked)" style="width:16px;height:16px;"></td>
       <td>${avatar}${m.display_name||'（尚未取得姓名）'}</td>
       <td style="cursor:pointer;" onclick="${isTagExpanded ? '' : `toggleTagEditor('${m.line_user_id}')`}" title="點一下編輯標籤">${tagCellContent}</td>
       <td><b>${m.remaining_credits}</b> 堂</td>
@@ -1132,30 +1201,15 @@ function pageMembers(){
           <button class="btn btn-ghost btn-sm" onclick="adjustMember('${m.line_user_id}', -1)">－1</button>
           <input type="number" id="setCredits-${m.line_user_id}" placeholder="輸入數字" style="width:70px;border:1px solid var(--line);border-radius:8px;padding:5px 8px;font-size:12.5px;">
           <button class="btn btn-primary btn-sm" onclick="setMemberCredits('${m.line_user_id}')">設定</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteMember('${m.line_user_id}')">刪除</button>
         </div>
       </td>
     </tr>`;
   }).join('');
 
-  const creditList = data.members.filter(m=>
-    (!batchCreditTagFilter || (m.tags||[]).includes(batchCreditTagFilter)) &&
-    (!batchCreditSearchQuery || (m.display_name||'').toLowerCase().includes(batchCreditSearchQuery.toLowerCase()))
-  );
-  const creditMemberRows = creditList.map(m=>{
-    const checked = batchCreditSelectedMembers.has(m.line_user_id);
-    const tagsHtml = (m.tags||[]).map(t=>`<span class="tag on" style="margin-left:4px;">${t}</span>`).join('');
-    return `
-    <label style="display:flex;align-items:center;gap:10px;padding:8px 6px;border-bottom:1px solid var(--line);cursor:pointer;">
-      <input type="checkbox" ${checked?'checked':''} onchange="toggleBatchCreditMember('${m.line_user_id}', this.checked)" style="width:16px;height:16px;">
-      <span>${m.display_name||'（尚未取得姓名）'}</span>
-      ${tagsHtml}
-      <span style="margin-left:auto;font-size:12px;color:var(--muted);">剩 ${m.remaining_credits} 堂</span>
-    </label>`;
-  }).join('');
-
   return `
     <div class="page-title">學員管理</div>
-    <div class="page-sub">學員會在<b>第一次透過 LINE 打開預約頁面後</b>自動出現在這份名單裡，你不需要手動新增。點「查看／管理」可以看到選課歷史、堂數批次明細。</div>
+    <div class="page-sub">學員會在<b>第一次透過 LINE 打開預約頁面後</b>自動出現在這份名單裡，你不需要手動新增。點「查看／管理」可以看到選課歷史、堂數批次明細。在下方列表打勾可以選取多位學員，套用到「批次加堂數」「批次選課」。</div>
 
     <div class="panel">
       <div class="panel-head"><h3>標籤管理</h3></div>
@@ -1172,20 +1226,32 @@ function pageMembers(){
     </div>
 
     <div class="panel">
-      <div class="panel-head"><h3>批次加堂數</h3></div>
+      <div class="panel-head"><h3>學員列表</h3></div>
       <div class="panel-body" style="display:flex;flex-wrap:wrap;gap:10px;">
-        <select onchange="onBatchCreditTagFilter(this.value)" style="border:1px solid var(--line);border-radius:8px;padding:8px 12px;font-size:13px;">
+        <select onchange="onMemberTagFilter(this.value)" style="border:1px solid var(--line);border-radius:8px;padding:8px 12px;font-size:13px;">
           <option value="">全部標籤</option>
-          ${availableTags.map(t=>`<option value="${t}" ${batchCreditTagFilter===t?'selected':''}>${t}</option>`).join('')}
+          ${availableTags.map(t=>`<option value="${t}" ${memberTagFilter===t?'selected':''}>${t}</option>`).join('')}
         </select>
-        <input type="text" placeholder="搜尋姓名..." value="${batchCreditSearchQuery}" oninput="onBatchCreditSearch(this.value)" style="flex:1;min-width:160px;border:1px solid var(--line);border-radius:8px;padding:8px 12px;font-size:13px;">
-        <button class="btn btn-ghost btn-sm" onclick='toggleBatchCreditSelectAll(${JSON.stringify(creditList.map(m=>({line_user_id:m.line_user_id})))})'>全選／取消全選（篩選結果）</button>
+        <input type="text" placeholder="搜尋姓名..." value="${memberSearchQuery}" oninput="onMemberSearch(this.value)" style="flex:1;min-width:160px;border:1px solid var(--line);border-radius:8px;padding:8px 12px;font-size:13px;">
+        <button class="btn btn-ghost btn-sm" onclick='toggleSelectAllFiltered(${JSON.stringify(list.map(m=>({line_user_id:m.line_user_id})))})'>全選／取消全選（目前顯示）</button>
       </div>
-      <div class="panel-body pad0" style="max-height:280px;overflow-y:auto;">
-        ${creditMemberRows || '<div style="text-align:center;color:var(--muted);padding:20px;">找不到符合的學員</div>'}
+      <div class="panel-body pad0">
+        <table><thead><tr>
+          <th></th>
+          <th style="cursor:pointer;user-select:none;" onclick="sortColumn('name')">學員 ${sortArrow('name')}</th>
+          <th style="cursor:pointer;user-select:none;" onclick="sortColumn('tag')">標籤 ${sortArrow('tag')}</th>
+          <th style="cursor:pointer;user-select:none;" onclick="sortColumn('credits')">剩餘堂數 ${sortArrow('credits')}</th>
+          <th style="cursor:pointer;user-select:none;" onclick="sortColumn('recent')">近期預約 ${sortArrow('recent')}</th>
+          <th></th>
+        </tr></thead>
+        <tbody>${rows || '<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:20px;">找不到符合的學員</td></tr>'}</tbody></table>
       </div>
+      <div class="panel-body"><div class="desc">已選擇 <b>${selectedMemberIds.size}</b> 位學員（下面「批次加堂數」「批次選課」都會套用到這些人）</div></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h3>批次加堂數</h3></div>
       <div class="panel-body">
-        <div class="desc" style="margin-bottom:10px;">已選擇 <b>${batchCreditSelectedMembers.size}</b> 位學員，以下設定會套用到每一位選中的學員。</div>
         <div class="form-grid">
           <div class="field"><label>堂數</label><input id="bcAmount" type="number" value="10" min="1"></div>
           <div class="field"><label>效期方式</label>
@@ -1199,13 +1265,33 @@ function pageMembers(){
           <div class="field" id="bcDaysField" style="display:none;"><label>幾天後到期</label><input id="bcExpiryDays" type="number" value="30" min="1"></div>
         </div>
       </div>
-      <div class="add-bar"><button class="btn btn-primary" onclick="submitBatchCredits()">＋ 幫選好的學員新增這批堂數</button></div>
+      <div class="add-bar"><button class="btn btn-primary" onclick="submitBatchCredits()">＋ 幫已選學員新增這批堂數</button></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h3>批次選課</h3></div>
+      <div class="panel-body">
+        <div class="form-grid">
+          <div class="field" style="grid-column:1/-1;">
+            <label>上課日期（可多選，僅固定課程需要；特別課會忽略此欄）</label>
+            <div id="bbDatesContainer">
+              <div class="date-row" style="display:flex;gap:6px;margin-bottom:6px;">
+                <input type="date" class="bbDateInput" style="flex:1;border:1px solid var(--line);border-radius:9px;padding:9px 11px;font-size:13px;background:var(--paper);color:var(--ink);">
+                <button type="button" class="btn btn-ghost btn-sm" onclick="removeBbDateRow(this)">✕</button>
+              </div>
+            </div>
+            <button type="button" class="btn btn-ghost btn-sm" onclick="addBbDateRow()">＋ 新增一個日期</button>
+          </div>
+          <div class="field"><label>課程</label><select id="bbClass">${getClassOptionsHtml() || '<option value="">尚無課程可選</option>'}</select></div>
+        </div>
+      </div>
+      <div class="add-bar"><button class="btn btn-primary" onclick="submitBatchBooking()">＋ 幫已選學員新增這些預約</button></div>
     </div>
 
     <div class="panel">
       <div class="panel-head"><h3>近期預約堂數統計</h3></div>
       <div class="panel-body">
-        <div class="desc" style="margin-bottom:10px;">計算每位學員在指定日期區間內，總共預約了幾堂課（不含已取消的）。下方學員列表的「近期預約」欄位會依這個區間更新。</div>
+        <div class="desc" style="margin-bottom:10px;">計算每位學員在指定日期區間內，總共預約了幾堂課（不含已取消的）。上方學員列表的「近期預約」欄位會依這個區間更新。</div>
         <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:end;">
           <div class="field" style="width:auto;"><label>快速設定：未來幾個月</label>
             <div style="display:flex;gap:6px;">
@@ -1218,24 +1304,20 @@ function pageMembers(){
           <button class="btn btn-primary btn-sm" onclick="applyStatsRange()">查詢這段區間</button>
         </div>
       </div>
-    </div>
-
-    <div class="panel">
-      <div class="panel-head"><h3>學員列表</h3></div>
-      <div class="panel-body">
-        <input type="text" placeholder="搜尋姓名..." value="${memberSearchQuery}" oninput="onMemberSearch(this.value)" style="width:100%;border:1px solid var(--line);border-radius:8px;padding:8px 12px;font-size:13px;">
-      </div>
-      <div class="panel-body pad0">
-        <table><thead><tr>
-          <th style="cursor:pointer;user-select:none;" onclick="sortColumn('name')">學員 ${sortArrow('name')}</th>
-          <th style="cursor:pointer;user-select:none;" onclick="sortColumn('tag')">標籤 ${sortArrow('tag')}</th>
-          <th style="cursor:pointer;user-select:none;" onclick="sortColumn('credits')">剩餘堂數 ${sortArrow('credits')}</th>
-          <th style="cursor:pointer;user-select:none;" onclick="sortColumn('recent')">近期預約 ${sortArrow('recent')}</th>
-          <th></th>
-        </tr></thead>
-        <tbody>${rows || '<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:20px;">找不到符合的學員</td></tr>'}</tbody></table>
-      </div>
     </div>`;
+}
+
+async function deleteMember(lineUserId){
+  const m = data.members.find(x=>x.line_user_id===lineUserId);
+  if(!m) return;
+  const ok = confirm(`確定要刪除學員「${m.display_name||'（尚未取得姓名）'}」嗎？\n這會一併刪除他的所有預約與堂數紀錄，無法復原。`);
+  if(!ok) return;
+  const { error } = await db.from('members').delete().eq('line_user_id', lineUserId);
+  if(error){ showToast('刪除失敗'); console.error(error); return; }
+  data.members = data.members.filter(x=>x.line_user_id!==lineUserId);
+  selectedMemberIds.delete(lineUserId);
+  render();
+  showToast('已刪除學員');
 }
 
 function onMemberSearch(val){ memberSearchQuery = val; render(); }
@@ -1360,87 +1442,6 @@ function getClassOptionsHtml(){
   return templateOptions + extraOptions;
 }
 
-/* ================= 批次選課 ================= */
-let batchSelectedMembers = new Set();
-let batchTagFilter = '';
-let batchSearchQuery = '';
-
-function toggleBatchMember(lineUserId, checked){
-  if(checked) batchSelectedMembers.add(lineUserId);
-  else batchSelectedMembers.delete(lineUserId);
-  render();
-}
-function toggleBatchSelectAll(list){
-  const allSelected = list.every(m=>batchSelectedMembers.has(m.line_user_id));
-  if(allSelected) list.forEach(m=>batchSelectedMembers.delete(m.line_user_id));
-  else list.forEach(m=>batchSelectedMembers.add(m.line_user_id));
-  render();
-}
-function onBatchTagFilter(val){ batchTagFilter = val; render(); }
-function onBatchSearch(val){ batchSearchQuery = val; render(); }
-
-function pageBatchBooking(){
-  const allTags = [...new Set(data.members.flatMap(m=>m.tags||[]))].sort();
-  let list = data.members.filter(m=>
-    (!batchTagFilter || (m.tags||[]).includes(batchTagFilter)) &&
-    (!batchSearchQuery || (m.display_name||'').toLowerCase().includes(batchSearchQuery.toLowerCase()))
-  );
-
-  const memberRows = list.map(m=>{
-    const checked = batchSelectedMembers.has(m.line_user_id);
-    const tags = (m.tags||[]).map(t=>`<span class="tag on" style="margin-left:4px;">${t}</span>`).join('');
-    return `
-    <label style="display:flex;align-items:center;gap:10px;padding:8px 6px;border-bottom:1px solid var(--line);cursor:pointer;">
-      <input type="checkbox" ${checked?'checked':''} onchange="toggleBatchMember('${m.line_user_id}', this.checked)" style="width:16px;height:16px;">
-      <span>${m.display_name||'（尚未取得姓名）'}</span>
-      ${tags}
-      <span style="margin-left:auto;font-size:12px;color:var(--muted);">剩 ${m.remaining_credits} 堂</span>
-    </label>`;
-  }).join('');
-
-  return `
-    <div class="page-title">批次選課</div>
-    <div class="page-sub">一次幫多位學員新增同一堂課的預約，很適合期班整班登記，或用標籤快速篩選出某個班級的學生。</div>
-
-    <div class="panel">
-      <div class="panel-head"><h3>1. 選擇學員</h3></div>
-      <div class="panel-body" style="display:flex;flex-wrap:wrap;gap:10px;">
-        <select onchange="onBatchTagFilter(this.value)" style="border:1px solid var(--line);border-radius:8px;padding:8px 12px;font-size:13px;">
-          <option value="">全部標籤</option>
-          ${allTags.map(t=>`<option value="${t}" ${batchTagFilter===t?'selected':''}>${t}</option>`).join('')}
-        </select>
-        <input type="text" placeholder="搜尋姓名..." value="${batchSearchQuery}" oninput="onBatchSearch(this.value)" style="flex:1;min-width:160px;border:1px solid var(--line);border-radius:8px;padding:8px 12px;font-size:13px;">
-        <button class="btn btn-ghost btn-sm" onclick='toggleBatchSelectAll(${JSON.stringify(list.map(m=>({line_user_id:m.line_user_id})))})'>全選／取消全選（篩選結果）</button>
-      </div>
-      <div class="panel-body pad0" style="max-height:340px;overflow-y:auto;">
-        ${memberRows || '<div style="text-align:center;color:var(--muted);padding:20px;">找不到符合的學員</div>'}
-      </div>
-      <div class="panel-body" style="padding-top:0;">
-        <div class="desc">已選擇 <b>${batchSelectedMembers.size}</b> 位學員</div>
-      </div>
-    </div>
-
-    <div class="panel">
-      <div class="panel-head"><h3>2. 選擇課程與日期</h3></div>
-      <div class="panel-body">
-        <div class="form-grid">
-          <div class="field" style="grid-column:1/-1;">
-            <label>上課日期（可多選，僅固定課程需要；特別課會忽略此欄）</label>
-            <div id="bbDatesContainer">
-              <div class="date-row" style="display:flex;gap:6px;margin-bottom:6px;">
-                <input type="date" class="bbDateInput" style="flex:1;border:1px solid var(--line);border-radius:9px;padding:9px 11px;font-size:13px;background:var(--paper);color:var(--ink);">
-                <button type="button" class="btn btn-ghost btn-sm" onclick="removeBbDateRow(this)">✕</button>
-              </div>
-            </div>
-            <button type="button" class="btn btn-ghost btn-sm" onclick="addBbDateRow()">＋ 新增一個日期</button>
-          </div>
-          <div class="field"><label>課程</label><select id="bbClass">${getClassOptionsHtml() || '<option value="">尚無課程可選</option>'}</select></div>
-        </div>
-      </div>
-      <div class="add-bar"><button class="btn btn-primary" onclick="submitBatchBooking()">＋ 幫選好的學員新增這些預約</button></div>
-    </div>`;
-}
-
 function addBbDateRow(){
   const container = document.getElementById('bbDatesContainer');
   const row = document.createElement('div');
@@ -1458,8 +1459,8 @@ function removeBbDateRow(btn){
 }
 
 async function submitBatchBooking(){
-  const memberIds = [...batchSelectedMembers];
-  if(memberIds.length===0){ showToast('請至少選擇一位學員'); return; }
+  const memberIds = [...selectedMemberIds];
+  if(memberIds.length===0){ showToast('請先在上方學員列表勾選要處理的學員'); return; }
   const selected = document.getElementById('bbClass').value;
   if(!selected){ showToast('請選擇課程'); return; }
   const [type, id] = selected.split(':');
@@ -1502,7 +1503,6 @@ async function submitBatchBooking(){
   }
 
   await loadAdminState();
-  batchSelectedMembers.clear();
   render();
   if(successCount>0) showToast(`成功新增 ${successCount} 筆預約`);
   if(skipped.length>0) showToast(`有 ${skipped.length} 筆未成功：${skipped.slice(0,3).join('、')}`);
@@ -1848,7 +1848,7 @@ function pageTeacherLog(){
     </div>` : ''}`;
 }
 
-const PAGES = {overview:pageOverview, store:pageStore, classes:pageClasses, teachers:pageTeachers, members:pageMembers, roster:pageRoster, teacherlog:pageTeacherLog, batchbook:pageBatchBooking};
+const PAGES = {overview:pageOverview, store:pageStore, classes:pageClasses, teachers:pageTeachers, members:pageMembers, roster:pageRoster, teacherlog:pageTeacherLog};
 
 function render(){
   document.getElementById('sidebarBrand').innerHTML = data.store.name + '<span>後台管理系統</span>';
@@ -1866,10 +1866,9 @@ async function navigateToPage(page){
   selectedMemberId = null; memberBookings = [];
   editingClassId = null;
   if(page==='classes'){ await loadDayOverrides(); }
-  if(page==='members'){ await loadMemberStats(); }
+  if(page==='members'){ await loadMemberStats(); await loadDayOverrides(); }
   if(page==='roster'){ await loadRoster(); }
   if(page==='teacherlog'){ await loadTeacherLog(teacherLogSelected || (data.teachers[0] && data.teachers[0].name) || ''); }
-  if(page==='batchbook'){ await loadDayOverrides(); batchSelectedMembers.clear(); batchTagFilter=''; batchSearchQuery=''; }
   render();
 }
 
