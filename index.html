@@ -129,19 +129,34 @@
   }
 
   /* ---- 課程日曆 ---- */
-  .mini-calendar{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;}
-  .mc-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;}
-  .mc-month-label{font-weight:700;font-size:14px;}
-  .mc-nav{border:none;background:var(--sage-light);color:var(--sage-dark);width:26px;height:26px;border-radius:50%;font-size:15px;cursor:pointer;}
-  .mc-weekdays{display:grid;grid-template-columns:repeat(7,1fr);text-align:center;font-size:11px;color:var(--muted);margin-bottom:4px;}
-  .mc-grid{display:grid;grid-template-columns:repeat(7,1fr);row-gap:3px;}
-  .mc-cell{aspect-ratio:1;display:flex;flex-direction:column;align-items:center;justify-content:center;border-radius:9px;cursor:pointer;font-size:12.5px;color:var(--ink);}
+  .mini-calendar{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;}
+  .mc-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;}
+  .mc-month-label{font-weight:700;font-size:16px;}
+  .mc-nav{border:none;background:var(--sage-light);color:var(--sage-dark);width:28px;height:28px;border-radius:50%;font-size:16px;cursor:pointer;}
+  .mc-weekdays{display:grid;grid-template-columns:repeat(7,1fr);text-align:center;font-size:11.5px;color:var(--muted);margin-bottom:6px;font-weight:600;}
+  .mc-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;}
+  .mc-cell{
+    min-height:88px;display:flex;flex-direction:column;align-items:stretch;
+    border-radius:9px;cursor:pointer;font-size:12px;color:var(--ink);
+    border:1px solid transparent;padding:4px;
+  }
+  .mc-cell:not(.empty):hover{background:var(--paper);}
   .mc-cell.empty{cursor:default;}
-  .mc-cell.past{color:#d8d4c9;}
-  .mc-dot{width:4px;height:4px;border-radius:50%;background:var(--sage);margin-top:2px;}
-  .mc-cell.selected{background:var(--sage);color:#fff;font-weight:700;}
-  .mc-cell.selected .mc-dot{background:#fff;}
-  .mc-cell.today:not(.selected){box-shadow:inset 0 0 0 1.5px var(--sage);font-weight:700;}
+  .mc-cell.past{color:#c2beb2;}
+  .mc-cell.past .mc-event{opacity:.55;}
+  .mc-daynum{font-size:12px;font-weight:600;margin-bottom:2px;}
+  .mc-events{display:flex;flex-direction:column;gap:2px;overflow:hidden;}
+  .mc-event{
+    background:var(--sage-light);color:var(--sage-dark);border-radius:5px;
+    padding:2px 5px;font-size:10.5px;line-height:1.4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  }
+  .mc-event.extra{background:var(--clay-light);color:#8a5a35;}
+  .mc-more{font-size:10px;color:var(--muted);padding:1px 5px;}
+  .mc-cell.selected{background:var(--sage-light);border-color:var(--sage);}
+  .mc-cell.today .mc-daynum{
+    display:inline-flex;align-items:center;justify-content:center;
+    background:var(--sage);color:#fff;border-radius:50%;width:20px;height:20px;font-size:11px;
+  }
 
   .toast{
     position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(20px);
@@ -221,11 +236,10 @@
     <div class="nav-item" data-page="store"><span class="ic">🏠</span>店家設定</div>
     <div class="nav-item" data-page="classes"><span class="ic">🗓️</span>課程設定</div>
     <div class="nav-item" data-page="roster"><span class="ic">📋</span>每日名單</div>
-    <div class="nav-item" data-page="teacherlog"><span class="ic">📈</span>老師教學紀錄</div>
-    <div class="nav-item" data-page="teachers"><span class="ic">🧑‍🏫</span>老師管理</div>
-    <div class="nav-item" data-page="notify"><span class="ic">🔔</span>通知設定</div>
     <div class="nav-item" data-page="members"><span class="ic">👥</span>學員管理</div>
     <div class="nav-item" data-page="batchbook"><span class="ic">✅</span>批次選課</div>
+    <div class="nav-item" data-page="teachers"><span class="ic">🧑‍🏫</span>老師管理</div>
+    <div class="nav-item" data-page="teacherlog"><span class="ic">📈</span>老師教學紀錄</div>
     <div class="sidebar-bottom"><span class="logout-link" onclick="logout()">🚪 登出</span></div>
   </div>
 
@@ -362,7 +376,6 @@ function pageOverview(){
       <div class="panel-body">
         <div class="settings-row"><div><div class="label">🗓️ 課程設定</div><div class="desc">設定固定的每週課表：課程名稱、老師、時間、上課星期、可預約人數，系統會依此自動產生未來每天的可預約課程；也可以在這裡設定開放預約的時間區間。</div></div></div>
         <div class="settings-row"><div><div class="label">🧑‍🏫 老師管理</div><div class="desc">新增／編輯授課老師資料，會顯示在學生端的課程卡片上。</div></div></div>
-        <div class="settings-row"><div><div class="label">🔔 通知設定</div><div class="desc">設定課前提醒發送時間與訊息內容、堂數不足提醒、取消預約時限等自動化規則。</div></div></div>
         <div class="settings-row"><div><div class="label">👥 學員管理</div><div class="desc">查看每位學生目前剩餘堂數、預約紀錄，並可手動增減堂數（收費後手動加堂）。</div></div></div>
       </div>
     </div>`;
@@ -407,16 +420,24 @@ function buildClassesCalendarHTML(){
     const cellDate = new Date(year, month-1, day);
     const isPast = cellDate < today;
     const { recurring, extras } = getDayOccurrences(iso);
-    const hasClasses = (recurring.length>0 || extras.length>0);
+    const all = [...recurring.map(c=>({time:c.time, title:c.title, extra:false})), ...extras.map(o=>({time:o.time, title:o.title, extra:true}))]
+      .sort((a,b)=>a.time.localeCompare(b.time));
     const isSelected = iso===classesCalendarSelected;
     const isToday = iso===todayIso;
     let cls = 'mc-cell';
     if(isPast) cls += ' past';
     if(isSelected) cls += ' selected';
     if(isToday) cls += ' today';
+
+    const maxShow = 3;
+    const chipsHtml = all.slice(0, maxShow).map(c=>
+      `<div class="mc-event${c.extra?' extra':''}">${c.time.slice(0,5)} ${c.title}</div>`
+    ).join('');
+    const moreHtml = all.length>maxShow ? `<div class="mc-more">+${all.length-maxShow} 更多</div>` : '';
+
     cells += `<div class="${cls}" onclick="selectClassesCalendarDate('${iso}')">
-      <span>${day}</span>
-      ${hasClasses ? '<span class="mc-dot"></span>' : ''}
+      <span class="mc-daynum">${day}</span>
+      <div class="mc-events">${chipsHtml}${moreHtml}</div>
     </div>`;
   }
 
@@ -460,11 +481,25 @@ function buildDayDetailHTML(){
       </div>
     </div>`;
   });
-  if(!rowsHtml) rowsHtml = `<div class="desc" style="padding:6px 0;">這天沒有排課，可以在下方「加開特別課」新增一堂</div>`;
+  if(!rowsHtml) rowsHtml = `
+    <div class="desc" style="padding:6px 0 10px;">這天沒有排課。</div>
+    <button class="btn btn-primary btn-sm" onclick="openSingleDayFormFor('${iso}')">＋ 加開這一天的課</button>`;
+  else rowsHtml += `<div style="margin-top:10px;"><button class="btn btn-ghost btn-sm" onclick="openSingleDayFormFor('${iso}')">＋ 再加開一堂特別課</button></div>`;
 
   return `
     <div class="label" style="margin-bottom:6px;">${label}</div>
     ${rowsHtml}`;
+}
+function openSingleDayFormFor(iso){
+  dayOverrideDate = iso;
+  showAddClassForm = true;
+  classFormMode = 'single';
+  editingClassId = null;
+  render();
+  setTimeout(()=>{
+    const el = document.getElementById('classFormPanel');
+    if(el) el.scrollIntoView({behavior:'smooth', block:'center'});
+  }, 60);
 }
 
 function selectClassesCalendarDate(iso){
@@ -494,6 +529,9 @@ async function quickEditOccurrence(iso, templateId){
   if(!tmpl) return;
   await quickCancelOccurrence(iso, templateId); // 先停開原本這天的固定課，改用下面的特別課取代
   dayOverrideDate = iso;
+  showAddClassForm = true;
+  classFormMode = 'single';
+  editingClassId = null;
   render();
   setTimeout(()=>{
     const setVal = (id, val)=>{ const el = document.getElementById(id); if(el) el.value = val; };
@@ -505,8 +543,14 @@ async function quickEditOccurrence(iso, templateId){
     const el = document.getElementById('ovExtraTitle');
     if(el) el.scrollIntoView({behavior:'smooth', block:'center'});
   }, 60);
-  showToast('已停開原本這天的課，內容已幫你帶到下方「加開特別課」，改完直接送出即可');
+  showToast('已停開原本這天的課，內容已幫你帶到下方表單，改完直接送出即可');
 }
+
+/* ---- 統一的「新增課程」表單模式 ---- */
+let classFormMode = 'recurring'; // 'recurring'（每週固定）| 'single'（只有這一天）
+let showAddClassForm = false;    // 表單預設收起，避免畫面太滿
+function setClassFormMode(mode){ classFormMode = mode; render(); }
+function toggleAddClassForm(){ showAddClassForm = !showAddClassForm; render(); }
 
 function pageClasses(){
   const n = data.notify;
@@ -527,39 +571,44 @@ function pageClasses(){
 
   const editing = editingClassId ? data.classes.find(c=>c.id===editingClassId) : null;
   const selectedDays = editing ? (editing.weekdays||[]) : [];
+  const formOpen = editing || showAddClassForm;
 
-  const cancelOverrides = dayOverrides.filter(o=>o.type==='cancel');
-  const extraOverrides = dayOverrides.filter(o=>o.type==='extra');
+  // 單日例外清單（停課＋特別課合併成一張表）
+  const exceptionRows = [
+    ...dayOverrides.filter(o=>o.type==='cancel').map(o=>{
+      const tmpl = data.classes.find(c=>c.id===o.class_template_id);
+      return { date:o.date, label:`${tmpl ? tmpl.title : '（原課程已刪除）'}`, type:'停課', id:o.id, danger:false };
+    }),
+    ...dayOverrides.filter(o=>o.type==='extra').map(o=>
+      ({ date:o.date, label:`${o.time} ${o.title}（${o.teacher}）`, type:'特別課', id:o.id, danger:true })
+    )
+  ].sort((a,b)=> a.date < b.date ? -1 : 1);
 
   return `
     <div class="page-title">課程設定</div>
-    <div class="page-sub">設定「每週固定課表」，系統會依照這裡的星期設定，自動產生課表給學生選；也可以在下方控制學生什麼時候能開始預約，或針對單一天調整課程。</div>
-    <div class="hint-box">💡 例如「哈達瑜珈」設定為每週二、四、六 10:30，系統就會自動在接下來每個週二/四/六產生一堂可預約課程，不用每天手動新增。</div>
+    <div class="page-sub">管理每週固定課表，並用下方日曆快速調整單一天的課程內容。</div>
 
     <div class="panel">
-      <div class="panel-head"><h3>課程日曆</h3></div>
-      <div class="panel-body">
-        <div class="desc" style="margin-bottom:12px;">點日期查看那天的課程，可以直接「停開這天」或「只修改這天」（不影響其他星期三的固定課表），有點的日期代表當天有排課。</div>
-        <div style="display:grid;grid-template-columns:280px 1fr;gap:20px;align-items:start;">
-          <div>${buildClassesCalendarHTML()}</div>
-          <div style="min-height:120px;">${buildDayDetailHTML()}</div>
-        </div>
+      <div class="panel-head">
+        <h3>目前課程範本</h3>
+        <button class="btn btn-primary btn-sm" onclick="toggleAddClassForm()">${formOpen && !editing ? '收起' : '＋ 新增課程'}</button>
       </div>
-    </div>
-
-    <div class="panel">
-      <div class="panel-head"><h3>目前課程範本</h3></div>
       <div class="panel-body pad0">
         <table>
           <thead><tr><th>課程名稱</th><th>授課老師</th><th>時段</th><th>上課星期</th><th>容納人數</th><th></th></tr></thead>
-          <tbody>${rows || '<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:20px;">尚無課程範本</td></tr>'}</tbody>
+          <tbody>${rows || '<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:20px;">尚無課程範本，點右上角「＋ 新增課程」開始設定</td></tr>'}</tbody>
         </table>
       </div>
-    </div>
 
-    <div class="panel" id="classFormPanel">
-      <div class="panel-head"><h3>${editing ? '編輯課程範本' : '新增課程範本'}</h3></div>
-      <div class="panel-body">
+      ${!formOpen ? '' : `
+      <div class="panel-body" id="classFormPanel" style="border-top:1px solid var(--line);">
+        ${!editing ? `
+        <div style="display:flex;gap:8px;margin-bottom:16px;">
+          <button class="btn ${classFormMode==='recurring'?'btn-primary':'btn-ghost'} btn-sm" onclick="setClassFormMode('recurring')">🔁 每週固定課程</button>
+          <button class="btn ${classFormMode==='single'?'btn-primary':'btn-ghost'} btn-sm" onclick="setClassFormMode('single')">📌 只有這一天（特別課）</button>
+        </div>` : `<div class="label" style="margin-bottom:12px;">編輯課程範本</div>`}
+
+        ${(editing || classFormMode==='recurring') ? `
         <div class="form-grid">
           <div class="field"><label>課程名稱</label><input id="ncTitle" placeholder="例如：晨間伸展" value="${editing ? editing.title : ''}"></div>
           <div class="field"><label>授課老師</label>
@@ -573,65 +622,55 @@ function pageClasses(){
               ${WEEKDAYS.map(w=>`<div class="wd-chip ${selectedDays.includes(w)?'on':''}" data-w="${w}" onclick="this.classList.toggle('on')">${w}</div>`).join('')}
             </div>
           </div>
-          <div class="field" style="grid-column:1/-1;"><label>課程介紹（學生預約時可以點開查看，選填）</label><textarea id="ncDescription" style="min-height:70px;">${editing ? (editing.description||'') : ''}</textarea></div>
+          <div class="field" style="grid-column:1/-1;"><label>課程介紹（選填）</label><textarea id="ncDescription" style="min-height:70px;">${editing ? (editing.description||'') : ''}</textarea></div>
         </div>
-      </div>
-      <div class="add-bar">
-        ${editing ? `<button class="btn btn-ghost" onclick="cancelEditClass()" style="margin-right:8px;">取消編輯</button>` : ''}
-        <button class="btn btn-primary" onclick="saveClassForm()">${editing ? '儲存修改' : '＋ 新增課程範本'}</button>
-      </div>
+        <div class="add-bar" style="padding-left:0;padding-right:0;">
+          ${editing ? `<button class="btn btn-ghost" onclick="cancelEditClass()" style="margin-right:8px;">取消編輯</button>` : ''}
+          <button class="btn btn-primary" onclick="saveClassForm()">${editing ? '儲存修改' : '＋ 新增固定課程'}</button>
+        </div>
+        ` : `
+        <div class="form-grid">
+          <div class="field"><label>日期</label><input id="ovDate" type="date" value="${dayOverrideDate}" onchange="dayOverrideDate=this.value"></div>
+          <div class="field"><label>課程名稱</label><input id="ovExtraTitle" placeholder="例如：中秋特別班"></div>
+          <div class="field"><label>授課老師</label>
+            <select id="ovExtraTeacher">${data.teachers.map(t=>`<option value="${t.name}">${t.name}</option>`).join('')}</select>
+          </div>
+          <div class="field"><label>上課時間</label><input id="ovExtraTime" type="time" value="10:00"></div>
+          <div class="field"><label>人數上限</label><input id="ovExtraCap" type="number" value="12"></div>
+          <div class="field" style="grid-column:1/-1;"><label>課程介紹（選填）</label><textarea id="ovExtraDescription" style="min-height:60px;"></textarea></div>
+        </div>
+        <div class="add-bar" style="padding-left:0;padding-right:0;">
+          <button class="btn btn-primary" onclick="addExtraOverride()">＋ 新增這一天的課</button>
+        </div>
+        `}
+      </div>`}
     </div>
 
     <div class="panel">
-      <div class="panel-head"><h3>單日調整（停課／加開特別課）</h3></div>
+      <div class="panel-head"><h3>課程日曆</h3></div>
       <div class="panel-body">
-        <div class="hint-box">💡 平常課表都一樣，但某天想臨時停一堂課，或加開一堂特別課時用這裡，不會影響其他日期的固定課表。<br>⚠️ 如果那堂課已經有學生預約了，停課後系統不會自動通知或退堂，請自己再到「學員管理」幫受影響的學生取消、退還堂數。</div>
-
-        <div class="form-grid" style="margin-bottom:14px;">
-          <div class="field"><label>日期</label><input id="ovDate" type="date" value="${dayOverrideDate}" onchange="dayOverrideDate=this.value"></div>
+        <div class="desc" style="margin-bottom:12px;">點日期查看那天的課程，可以直接「停開這天」或「只修改這天」（不影響其他星期的固定課表）。</div>
+        <div style="display:grid;grid-template-columns:1.7fr 1fr;gap:20px;align-items:start;">
+          <div>${buildClassesCalendarHTML()}</div>
+          <div style="min-height:120px;">${buildDayDetailHTML()}</div>
         </div>
-
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
-          <div>
-            <div class="label" style="margin-bottom:8px;">停開某堂固定課</div>
-            <div class="form-grid form-grid.full" style="grid-template-columns:1fr;gap:8px;">
-              <select id="ovCancelTemplate">${data.classes.map(c=>`<option value="${c.id}">${c.title}（${c.teacher} ${c.time}，每週${(c.weekdays||[]).join('')}）</option>`).join('') || '<option value="">尚無課程範本</option>'}</select>
-              <button class="btn btn-danger btn-sm" onclick="addCancelOverride()">這天停開這堂課</button>
-            </div>
-          </div>
-          <div>
-            <div class="label" style="margin-bottom:8px;">加開特別課</div>
-            <div class="form-grid form-grid.full" style="grid-template-columns:1fr;gap:8px;">
-              <input id="ovExtraTitle" placeholder="課程名稱，例如：中秋特別班">
-              <select id="ovExtraTeacher">${data.teachers.map(t=>`<option value="${t.name}">${t.name}</option>`).join('')}</select>
-              <div style="display:flex;gap:8px;">
-                <input id="ovExtraTime" type="time" value="10:00" style="flex:1;">
-                <input id="ovExtraCap" type="number" value="12" placeholder="人數上限" style="width:80px;">
-              </div>
-              <textarea id="ovExtraDescription" placeholder="課程介紹（選填）" style="min-height:50px;"></textarea>
-              <button class="btn btn-primary btn-sm" onclick="addExtraOverride()">這天加開這堂課</button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="panel-head" style="border-top:1px solid var(--line);"><h3>已設定的停課</h3></div>
-      <div class="panel-body pad0">
-        <table><thead><tr><th>日期</th><th>課程</th><th></th></tr></thead>
-        <tbody>${cancelOverrides.map(o=>{
-          const tmpl = data.classes.find(c=>c.id===o.class_template_id);
-          return `<tr><td>${o.date}</td><td>${tmpl ? tmpl.title : '（原課程已刪除）'}</td><td><div class="row-actions"><button class="btn btn-ghost btn-sm" onclick="removeOverride('${o.id}')">取消停課</button></div></td></tr>`;
-        }).join('') || '<tr><td colspan="3" style="text-align:center;color:var(--muted);padding:16px;">目前沒有設定停課</td></tr>'}</tbody></table>
-      </div>
-
-      <div class="panel-head" style="border-top:1px solid var(--line);"><h3>已設定的特別課</h3></div>
-      <div class="panel-body pad0">
-        <table><thead><tr><th>日期</th><th>課程</th><th></th></tr></thead>
-        <tbody>${extraOverrides.map(o=>
-          `<tr><td>${o.date}</td><td>${o.time} ${o.title}（${o.teacher}，上限 ${o.cap} 人）</td><td><div class="row-actions"><button class="btn btn-danger btn-sm" onclick="removeOverride('${o.id}')">刪除</button></div></td></tr>`
-        ).join('') || '<tr><td colspan="3" style="text-align:center;color:var(--muted);padding:16px;">目前沒有加開特別課</td></tr>'}</tbody></table>
       </div>
     </div>
+
+    ${exceptionRows.length ? `
+    <div class="panel">
+      <div class="panel-head"><h3>單日例外清單</h3></div>
+      <div class="panel-body pad0">
+        <table><thead><tr><th>日期</th><th>類型</th><th>內容</th><th></th></tr></thead>
+        <tbody>${exceptionRows.map(r=>`
+          <tr>
+            <td>${r.date}</td>
+            <td><span class="tag ${r.danger?'off':'on'}">${r.type}</span></td>
+            <td>${r.label}</td>
+            <td><div class="row-actions"><button class="btn btn-ghost btn-sm" onclick="removeOverride('${r.id}')">移除</button></div></td>
+          </tr>`).join('')}</tbody></table>
+      </div>
+    </div>` : ''}
 
     <div class="panel">
       <div class="panel-head"><h3>開放預約時間</h3></div>
@@ -655,6 +694,18 @@ function pageClasses(){
             </label>
             <button class="btn btn-ghost btn-sm" onclick="clearBookingWindow()">清除設定（改回預設規則）</button>
             <button class="btn btn-primary btn-sm" onclick="saveBookingWindow()">套用這段區間</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h3>取消預約時限</h3></div>
+      <div class="panel-body">
+        <div class="settings-row">
+          <div><div class="label">距離上課時間不到幾分鐘就不能自行取消</div><div class="desc">避免臨時取消影響其他學生。例如填 60 代表提前 1 小時、填 10 代表提前 10 分鐘。</div></div>
+          <div>
+            <input type="number" value="${n.cancel_deadline_minutes}" style="width:70px;border:1px solid var(--line);border-radius:8px;padding:7px 10px;font-size:13px;" onchange="updateNotify('cancel_deadline_minutes', Number(this.value))"> 分鐘
           </div>
         </div>
       </div>
@@ -705,17 +756,6 @@ async function removeClass(id){
 }
 
 /* ---- 單日停課 / 加開特別課 ---- */
-async function addCancelOverride(){
-  const templateId = document.getElementById('ovCancelTemplate').value;
-  if(!templateId){ showToast('請選擇要停開的課程'); return; }
-  const already = dayOverrides.some(o=>o.type==='cancel' && o.date===dayOverrideDate && o.class_template_id===templateId);
-  if(already){ showToast('這天這堂課已經設定過停課了'); return; }
-  const { error } = await db.from('class_overrides').insert({ type:'cancel', date:dayOverrideDate, class_template_id:templateId });
-  if(error){ showToast('設定失敗'); console.error(error); return; }
-  await loadDayOverrides();
-  render();
-  showToast(`已設定 ${dayOverrideDate} 停開這堂課`);
-}
 async function addExtraOverride(){
   const title = document.getElementById('ovExtraTitle').value.trim();
   const teacher = document.getElementById('ovExtraTeacher').value;
@@ -887,53 +927,6 @@ async function pickTheme(themeKey){
   showToast(`已套用「${THEMES[themeKey].name}」主題，學生端會同步看到`);
 }
 
-/* ================= 通知設定 ================= */
-function pageNotify(){
-  const n = data.notify;
-  return `
-    <div class="page-title">通知設定</div>
-    <div class="page-sub">這裡設定的內容會由後端排程，透過 LINE Messaging API 自動發送給學生（此頁面本身不會真的寄出訊息，發送排程仍需另外設定）。</div>
-
-    <div class="panel">
-      <div class="panel-head"><h3>課前提醒</h3></div>
-      <div class="panel-body">
-        <div class="settings-row">
-          <div><div class="label">開啟課前一天提醒</div><div class="desc">於上課前一天固定時間，自動推播提醒給有預約該堂課的學生。</div></div>
-          <div class="toggle ${n.reminder_enabled?'on':''}" onclick="toggleNotify('reminder_enabled', ${!n.reminder_enabled})"><div class="knob"></div></div>
-        </div>
-        <div class="settings-row">
-          <div><div class="label">發送時間</div><div class="desc">建議設定在晚間，讓學生有充分時間安排隔天行程。</div></div>
-          <input type="time" value="${n.reminder_time}" style="border:1px solid var(--line);border-radius:8px;padding:7px 10px;font-size:13px;" onchange="updateNotify('reminder_time', this.value)">
-        </div>
-        <div class="settings-row" style="flex-direction:column;align-items:stretch;">
-          <div class="label" style="margin-bottom:8px;">訊息內容範本</div>
-          <textarea id="templateEditor" style="min-height:130px;">${n.reminder_template}</textarea>
-          <div class="desc" style="margin:8px 0;">
-            可用變數：<span class="var-tag">{姓名}</span> <span class="var-tag">{日期}</span> <span class="var-tag">{時間}</span> <span class="var-tag">{課程名稱}</span> <span class="var-tag">{老師}</span>
-          </div>
-          <button class="btn btn-primary" style="align-self:flex-end;" onclick="saveTemplate()">儲存範本</button>
-        </div>
-      </div>
-    </div>
-
-    <div class="panel">
-      <div class="panel-head"><h3>其他自動化規則</h3></div>
-      <div class="panel-body">
-        <div class="settings-row">
-          <div><div class="label">堂數不足提醒</div><div class="desc">當學生剩餘堂數低於門檻時，自動發送續購提醒。</div></div>
-          <div class="toggle ${n.low_credit_enabled?'on':''}" onclick="toggleNotify('low_credit_enabled', ${!n.low_credit_enabled})"><div class="knob"></div></div>
-        </div>
-        <div class="settings-row">
-          <div><div class="label">提醒門檻</div><div class="desc">剩餘堂數低於此數字時觸發提醒。</div></div>
-          <input type="number" value="${n.low_credit_threshold}" style="width:70px;border:1px solid var(--line);border-radius:8px;padding:7px 10px;font-size:13px;" onchange="updateNotify('low_credit_threshold', Number(this.value))">
-        </div>
-        <div class="settings-row">
-          <div><div class="label">取消預約時限</div><div class="desc">距離上課時間不到幾分鐘就不能自行取消（避免臨時取消影響其他學生）。例如填 60 代表提前 1 小時、填 10 代表提前 10 分鐘。</div></div>
-          <input type="number" value="${n.cancel_deadline_minutes}" style="width:70px;border:1px solid var(--line);border-radius:8px;padding:7px 10px;font-size:13px;" onchange="updateNotify('cancel_deadline_minutes', Number(this.value))"> 分鐘
-        </div>
-      </div>
-    </div>`;
-}
 async function saveBookingWindow(){
   const start = document.getElementById('bwStart').value;
   const end = document.getElementById('bwEnd').value;
@@ -983,18 +976,17 @@ function toggleTagEditor(lineUserId){
   expandedTagMemberId = (expandedTagMemberId===lineUserId) ? null : lineUserId;
   render();
 }
-async function addMemberTagFromSelect(lineUserId){
-  const select = document.getElementById(`tagSelect-${lineUserId}`);
-  const tag = select.value;
-  if(!tag){ showToast('請先選擇標籤'); return; }
+async function addMemberTagFromSelect(lineUserId, tag){
+  if(!tag){ expandedTagMemberId = null; render(); return; } // 選到空白選項＝收起
   const m = data.members.find(x=>x.line_user_id===lineUserId);
   if(!m) return;
   const tags = Array.isArray(m.tags) ? m.tags : [];
-  if(tags.includes(tag)){ showToast('這個標籤已經加過了'); return; }
+  if(tags.includes(tag)){ showToast('這個標籤已經加過了'); expandedTagMemberId = null; render(); return; }
   const newTags = [...tags, tag];
   const { error } = await db.from('members').update({ tags:newTags }).eq('line_user_id', lineUserId);
   if(error){ showToast('新增失敗'); console.error(error); return; }
   m.tags = newTags;
+  expandedTagMemberId = null; // 選完直接收起，不用再按收起
   render();
 }
 async function removeMemberTag(lineUserId, tag){
@@ -1118,28 +1110,19 @@ function pageMembers(){
     const tagChips = tags.map(t=>`<span class="tag on" style="margin:1px 3px 1px 0;display:inline-block;">${t}</span>`).join('') || '<span style="color:var(--muted);font-size:12px;">＋ 新增標籤</span>';
     const selectableTags = availableTags.filter(t=>!tags.includes(t));
 
-    const tagEditor = !isTagExpanded ? '' : `
-    <tr>
-      <td colspan="5" style="background:var(--paper);">
-        <div style="padding:12px 6px;">
-          <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;">
-            ${tags.map(t=>`<span class="tag on" style="display:inline-flex;align-items:center;gap:5px;">${t}<span style="cursor:pointer;font-weight:700;" onclick="removeMemberTag('${m.line_user_id}','${t}')">✕</span></span>`).join('') || '<span style="color:var(--muted);font-size:12px;">目前沒有標籤</span>'}
-          </div>
-          <div style="display:flex;gap:8px;">
-            <select id="tagSelect-${m.line_user_id}" style="flex:1;border:1px solid var(--line);border-radius:8px;padding:7px 10px;font-size:13px;">
-              ${selectableTags.length ? selectableTags.map(t=>`<option value="${t}">${t}</option>`).join('') : '<option value="">（沒有可加的標籤，請先在上方「標籤管理」新增）</option>'}
-            </select>
-            <button class="btn btn-primary btn-sm" onclick="addMemberTagFromSelect('${m.line_user_id}')">＋ 加上這個標籤</button>
-            <button class="btn btn-ghost btn-sm" onclick="toggleTagEditor('${m.line_user_id}')">收起</button>
-          </div>
-        </div>
-      </td>
-    </tr>`;
+    const tagCellContent = !isTagExpanded ? tagChips : `
+      <div style="display:flex;flex-wrap:wrap;align-items:center;gap:4px;" onclick="event.stopPropagation()">
+        ${tags.map(t=>`<span class="tag on" style="display:inline-flex;align-items:center;gap:4px;">${t}<span style="cursor:pointer;font-weight:700;" onclick="removeMemberTag('${m.line_user_id}','${t}')">✕</span></span>`).join('')}
+        <select autofocus onchange="addMemberTagFromSelect('${m.line_user_id}', this.value)" style="border:1px solid var(--line);border-radius:6px;padding:3px 6px;font-size:12px;max-width:130px;">
+          <option value="">${selectableTags.length ? '＋ 選標籤' : '（無可加標籤）'}</option>
+          ${selectableTags.map(t=>`<option value="${t}">${t}</option>`).join('')}
+        </select>
+      </div>`;
 
     return `
     <tr>
       <td>${avatar}${m.display_name||'（尚未取得姓名）'}</td>
-      <td style="cursor:pointer;" onclick="toggleTagEditor('${m.line_user_id}')" title="點一下編輯標籤">${tagChips}</td>
+      <td style="cursor:pointer;" onclick="${isTagExpanded ? '' : `toggleTagEditor('${m.line_user_id}')`}" title="點一下編輯標籤">${tagCellContent}</td>
       <td><b>${m.remaining_credits}</b> 堂</td>
       <td>${recentCount} 堂</td>
       <td>
@@ -1151,7 +1134,7 @@ function pageMembers(){
           <button class="btn btn-primary btn-sm" onclick="setMemberCredits('${m.line_user_id}')">設定</button>
         </div>
       </td>
-    </tr>${tagEditor}`;
+    </tr>`;
   }).join('');
 
   const creditList = data.members.filter(m=>
@@ -1865,7 +1848,7 @@ function pageTeacherLog(){
     </div>` : ''}`;
 }
 
-const PAGES = {overview:pageOverview, store:pageStore, classes:pageClasses, teachers:pageTeachers, notify:pageNotify, members:pageMembers, roster:pageRoster, teacherlog:pageTeacherLog, batchbook:pageBatchBooking};
+const PAGES = {overview:pageOverview, store:pageStore, classes:pageClasses, teachers:pageTeachers, members:pageMembers, roster:pageRoster, teacherlog:pageTeacherLog, batchbook:pageBatchBooking};
 
 function render(){
   document.getElementById('sidebarBrand').innerHTML = data.store.name + '<span>後台管理系統</span>';
