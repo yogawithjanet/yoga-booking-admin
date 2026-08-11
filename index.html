@@ -1297,24 +1297,6 @@ function pageMembers(){
     </div>
 
     <div class="panel">
-      <div class="panel-head"><h3>近期預約堂數統計</h3></div>
-      <div class="panel-body">
-        <div class="desc" style="margin-bottom:10px;">計算每位學員在指定日期區間內，總共預約了幾堂課（不含已取消的）。下方學員列表的「近期預約」欄位會依這個區間更新。</div>
-        <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:end;">
-          <div class="field" style="width:auto;"><label>快速設定：未來幾個月</label>
-            <div style="display:flex;gap:6px;">
-              <input type="number" id="statsMonthsInput" value="${statsMonths}" style="width:70px;border:1px solid var(--line);border-radius:8px;padding:7px 10px;font-size:13px;">
-              <button class="btn btn-ghost btn-sm" onclick="applyStatsMonths()">套用</button>
-            </div>
-          </div>
-          <div class="field" style="width:auto;"><label>開始日期</label><input type="date" id="statsStart" value="${statsRangeStart}"></div>
-          <div class="field" style="width:auto;"><label>結束日期</label><input type="date" id="statsEnd" value="${statsRangeEnd}"></div>
-          <button class="btn btn-primary btn-sm" onclick="applyStatsRange()">查詢這段區間</button>
-        </div>
-      </div>
-    </div>
-
-    <div class="panel">
       <div class="panel-head"><h3>學員列表</h3></div>
       <div class="panel-body" style="display:flex;flex-wrap:wrap;gap:10px;">
         <select onchange="onMemberTagFilter(this.value)" style="border:1px solid var(--line);border-radius:8px;padding:8px 12px;font-size:13px;">
@@ -1323,6 +1305,16 @@ function pageMembers(){
         </select>
         <input type="text" placeholder="搜尋姓名..." value="${memberSearchQuery}" oninput="onMemberSearch(this.value)" style="flex:1;min-width:160px;border:1px solid var(--line);border-radius:8px;padding:8px 12px;font-size:13px;">
         <button class="btn btn-ghost btn-sm" onclick='toggleSelectAllFiltered(${JSON.stringify(list.map(m=>({line_user_id:m.line_user_id})))})'>全選／取消全選（目前顯示）</button>
+      </div>
+      <div class="panel-body" style="padding-top:0;padding-bottom:14px;display:flex;flex-wrap:wrap;align-items:center;gap:8px;font-size:12px;color:var(--muted);">
+        <span>「近期預約」統計區間：</span>
+        <input type="number" id="statsMonthsInput" value="${statsMonths}" style="width:46px;border:1px solid var(--line);border-radius:6px;padding:4px 6px;font-size:12px;"> 個月
+        <button class="btn btn-ghost btn-sm" onclick="applyStatsMonths()" style="padding:4px 9px;font-size:11px;">套用</button>
+        <span style="color:var(--line);">｜</span>
+        <input type="date" id="statsStart" value="${statsRangeStart}" style="border:1px solid var(--line);border-radius:6px;padding:4px 6px;font-size:12px;">
+        <span>～</span>
+        <input type="date" id="statsEnd" value="${statsRangeEnd}" style="border:1px solid var(--line);border-radius:6px;padding:4px 6px;font-size:12px;">
+        <button class="btn btn-ghost btn-sm" onclick="applyStatsRange()" style="padding:4px 9px;font-size:11px;">套用區間</button>
       </div>
       <div class="panel-body pad0">
         <table><thead><tr>
