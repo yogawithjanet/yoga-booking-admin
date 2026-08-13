@@ -331,6 +331,24 @@ let memberSearchQuery = '';
 let memberSortBy = 'default'; // default | credits_desc | credits_asc | name
 let memberStatsCounts = {};   // line_user_id -> 指定區間內的已預約堂數
 let statsMonths = 2;
+/* ---- 標籤自動配色：同一個標籤文字永遠是同一個顏色 ---- */
+const TAG_COLORS = [
+  { bg:'#eaf0e6', text:'#3f5a3c' }, // 鼠尾草綠
+  { bg:'#f7e9dd', text:'#8a5a35' }, // 土黃
+  { bg:'#e3edf7', text:'#2f5a8a' }, // 藍
+  { bg:'#f3e3f2', text:'#7a3f78' }, // 紫
+  { bg:'#fdf1d0', text:'#8a6a1f' }, // 黃
+  { bg:'#fbe3e6', text:'#9c3f52' }, // 玫瑰紅
+  { bg:'#dff3ec', text:'#1f7a5c' }, // 薄荷綠
+  { bg:'#e8eaf0', text:'#454f66' }, // 石板灰
+];
+function tagColor(tag){
+  let hash = 0;
+  for(let i=0;i<tag.length;i++){ hash = (hash*31 + tag.charCodeAt(i)) >>> 0; }
+  const c = TAG_COLORS[hash % TAG_COLORS.length];
+  return `background:${c.bg};color:${c.text};`;
+}
+
 function todayISO(offsetDays=0){
   const d = new Date(); d.setDate(d.getDate()+offsetDays);
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
@@ -1212,13 +1230,13 @@ function pageMembers(){
     const recentCount = memberStatsCounts[m.line_user_id] || 0;
     const isTagExpanded = expandedTagMemberId === m.line_user_id;
     const tags = Array.isArray(m.tags) ? m.tags : [];
-    const tagChips = tags.map(t=>`<span class="tag on" style="margin:1px 3px 1px 0;display:inline-block;">${t}</span>`).join('') || '<span style="color:var(--muted);font-size:12px;">＋ 新增標籤</span>';
+    const tagChips = tags.map(t=>`<span class="tag on" style="margin:1px 3px 1px 0;display:inline-block;${tagColor(t)}">${t}</span>`).join('') || '<span style="color:var(--muted);font-size:12px;">＋ 新增標籤</span>';
     const selectableTags = availableTags.filter(t=>!tags.includes(t));
     const isChecked = selectedMemberIds.has(m.line_user_id);
 
     const tagCellContent = !isTagExpanded ? tagChips : `
       <div style="display:flex;flex-wrap:wrap;align-items:center;gap:4px;" onclick="event.stopPropagation()">
-        ${tags.map(t=>`<span class="tag on" style="display:inline-flex;align-items:center;gap:4px;">${t}<span style="cursor:pointer;font-weight:700;" onclick="removeMemberTag('${m.line_user_id}','${t}')">✕</span></span>`).join('')}
+        ${tags.map(t=>`<span class="tag on" style="display:inline-flex;align-items:center;gap:4px;${tagColor(t)}">${t}<span style="cursor:pointer;font-weight:700;" onclick="removeMemberTag('${m.line_user_id}','${t}')">✕</span></span>`).join('')}
         <select autofocus onchange="addMemberTagFromSelect('${m.line_user_id}', this.value)" style="border:1px solid var(--line);border-radius:6px;padding:3px 6px;font-size:12px;max-width:130px;">
           <option value="">${selectableTags.length ? '＋ 選標籤' : '（無可加標籤）'}</option>
           ${selectableTags.map(t=>`<option value="${t}">${t}</option>`).join('')}
@@ -1258,7 +1276,7 @@ function pageMembers(){
           <button class="tag-add-btn" onclick="addAvailableTag()">＋</button>
         </div>
         <div class="tag-chip-wrap">
-          ${availableTags.map(t=>`<span class="tag-chip">${t}<span class="x" onclick="removeAvailableTag('${t}')">✕</span></span>`).join('') || '<span style="color:var(--muted);font-size:12px;">尚未建立任何標籤</span>'}
+          ${availableTags.map(t=>`<span class="tag-chip" style="${tagColor(t)}">${t}<span class="x" onclick="removeAvailableTag('${t}')">✕</span></span>`).join('') || '<span style="color:var(--muted);font-size:12px;">尚未建立任何標籤</span>'}
         </div>
       </div>
 
