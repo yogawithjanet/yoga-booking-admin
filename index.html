@@ -312,7 +312,7 @@ function applyTheme(themeName){
 }
 
 let data = {
-  store: { name:'瑜珈時光', line_oa:'', greeting:'', admin_password:'yoga1234', security_question:'', security_answer:'', theme:'sage', available_tags:[] },
+  store: { name:'瑜珈時光', line_oa:'', greeting:'', admin_password:'yoga1234', security_question:'', security_answer:'', theme:'sage', available_tags:[], tag_colors:{} },
   classes: [],   // class_templates
   teachers: [],
   members: [],
@@ -331,7 +331,7 @@ let memberSearchQuery = '';
 let memberSortBy = 'default'; // default | credits_desc | credits_asc | name
 let memberStatsCounts = {};   // line_user_id -> 指定區間內的已預約堂數
 let statsMonths = 2;
-/* ---- 標籤自動配色：同一個標籤文字永遠是同一個顏色 ---- */
+/* ---- 標籤配色：可以手動選 10 種顏色其中一種，沒選過的話先用自動配色顯示 ---- */
 const TAG_COLORS = [
   { bg:'#eaf0e6', text:'#3f5a3c' }, // 鼠尾草綠
   { bg:'#f7e9dd', text:'#8a5a35' }, // 土黃
@@ -341,12 +341,28 @@ const TAG_COLORS = [
   { bg:'#fbe3e6', text:'#9c3f52' }, // 玫瑰紅
   { bg:'#dff3ec', text:'#1f7a5c' }, // 薄荷綠
   { bg:'#e8eaf0', text:'#454f66' }, // 石板灰
+  { bg:'#fbe8d6', text:'#a35a1f' }, // 橘
+  { bg:'#dcf2f5', text:'#1f6f7a' }, // 青藍
 ];
-function tagColor(tag){
+function getTagColorIndex(tag){
+  const saved = data.store.tag_colors || {};
+  if(saved[tag] !== undefined && saved[tag] !== null) return saved[tag];
   let hash = 0;
   for(let i=0;i<tag.length;i++){ hash = (hash*31 + tag.charCodeAt(i)) >>> 0; }
-  const c = TAG_COLORS[hash % TAG_COLORS.length];
+  return hash % TAG_COLORS.length;
+}
+function tagColorStyle(tag){
+  const c = TAG_COLORS[getTagColorIndex(tag)];
   return `background:${c.bg};color:${c.text};`;
+}
+async function setTagColor(tag, index){
+  const colors = { ...(data.store.tag_colors||{}) };
+  colors[tag] = index;
+  const { error } = await db.from('store_settings').update({ tag_colors: colors }).eq('id', 1);
+  if(error){ showToast('設定失敗'); console.error(error); return; }
+  data.store.tag_colors = colors;
+  expandedColorTag = null;
+  render();
 }
 
 function todayISO(offsetDays=0){
@@ -1091,6 +1107,8 @@ async function updateNotify(key, val){
 
 /* ================= 學員管理 ================= */
 let expandedTagMemberId = null;   // 目前展開「標籤編輯」的學員
+let expandedColorTag = null;      // 目前展開選色盤的標籤
+function toggleColorPicker(tag){ expandedColorTag = (expandedColorTag===tag) ? null : tag; render(); }
 
 function toggleTagEditor(lineUserId){
   expandedTagMemberId = (expandedTagMemberId===lineUserId) ? null : lineUserId;
@@ -1230,13 +1248,13 @@ function pageMembers(){
     const recentCount = memberStatsCounts[m.line_user_id] || 0;
     const isTagExpanded = expandedTagMemberId === m.line_user_id;
     const tags = Array.isArray(m.tags) ? m.tags : [];
-    const tagChips = tags.map(t=>`<span class="tag on" style="margin:1px 3px 1px 0;display:inline-block;${tagColor(t)}">${t}</span>`).join('') || '<span style="color:var(--muted);font-size:12px;">＋ 新增標籤</span>';
+    const tagChips = tags.map(t=>`<span class="tag on" style="margin:1px 3px 1px 0;display:inline-block;${tagColorStyle(t)}">${t}</span>`).join('') || '<span style="color:var(--muted);font-size:12px;">＋ 新增標籤</span>';
     const selectableTags = availableTags.filter(t=>!tags.includes(t));
     const isChecked = selectedMemberIds.has(m.line_user_id);
 
     const tagCellContent = !isTagExpanded ? tagChips : `
       <div style="display:flex;flex-wrap:wrap;align-items:center;gap:4px;" onclick="event.stopPropagation()">
-        ${tags.map(t=>`<span class="tag on" style="display:inline-flex;align-items:center;gap:4px;${tagColor(t)}">${t}<span style="cursor:pointer;font-weight:700;" onclick="removeMemberTag('${m.line_user_id}','${t}')">✕</span></span>`).join('')}
+        ${tags.map(t=>`<span class="tag on" style="display:inline-flex;align-items:center;gap:4px;${tagColorStyle(t)}">${t}<span style="cursor:pointer;font-weight:700;" onclick="removeMemberTag('${m.line_user_id}','${t}')">✕</span></span>`).join('')}
         <select autofocus onchange="addMemberTagFromSelect('${m.line_user_id}', this.value)" style="border:1px solid var(--line);border-radius:6px;padding:3px 6px;font-size:12px;max-width:130px;">
           <option value="">${selectableTags.length ? '＋ 選標籤' : '（無可加標籤）'}</option>
           ${selectableTags.map(t=>`<option value="${t}">${t}</option>`).join('')}
@@ -1270,13 +1288,26 @@ function pageMembers(){
     <div class="action-row">
       <div class="action-card">
         <h3>標籤管理</h3>
-        <div class="desc">先建立標籤（例如：期班A、體驗、週四晚班），加標籤、篩選學員時就能直接用下拉選單選。</div>
+        <div class="desc">先建立標籤（例如：期班A、體驗、週四晚班），加標籤、篩選學員時就能直接用下拉選單選。點標籤文字可以選顏色。</div>
         <div class="tag-add-row">
           <input type="text" id="newAvailableTagInput" placeholder="輸入新標籤" onkeydown="if(event.key==='Enter') addAvailableTag()">
           <button class="tag-add-btn" onclick="addAvailableTag()">＋</button>
         </div>
-        <div class="tag-chip-wrap">
-          ${availableTags.map(t=>`<span class="tag-chip" style="${tagColor(t)}">${t}<span class="x" onclick="removeAvailableTag('${t}')">✕</span></span>`).join('') || '<span style="color:var(--muted);font-size:12px;">尚未建立任何標籤</span>'}
+        <div style="display:flex;flex-direction:column;gap:10px;">
+          ${availableTags.map(t=>{
+            const isOpen = expandedColorTag === t;
+            return `
+            <div>
+              <div style="display:flex;align-items:center;gap:8px;">
+                <span class="tag-chip" style="cursor:pointer;${tagColorStyle(t)}" onclick="toggleColorPicker('${t}')">${t}</span>
+                <span style="cursor:pointer;color:var(--muted);font-size:11.5px;" onclick="removeAvailableTag('${t}')">移除</span>
+              </div>
+              ${isOpen ? `
+              <div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:9px;padding-left:2px;">
+                ${TAG_COLORS.map((c,i)=>`<span onclick="setTagColor('${t}', ${i})" title="選這個顏色" style="width:22px;height:22px;border-radius:50%;background:${c.bg};cursor:pointer;border:2px solid ${getTagColorIndex(t)===i ? c.text : 'transparent'};display:inline-block;"></span>`).join('')}
+              </div>` : ''}
+            </div>`;
+          }).join('') || '<span style="color:var(--muted);font-size:12px;">尚未建立任何標籤</span>'}
         </div>
       </div>
 
