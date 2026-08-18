@@ -1503,20 +1503,36 @@ async function openMemberDetail(lineUserId){
     loadMemberBatches(lineUserId)
   ]);
   memberBookings = bookingsRes.data || [];
-  await backfillUntrackedCredits(lineUserId);
+  await reconcileMemberCredits(lineUserId);
   render();
 }
 
-// 補救舊資料：堂數批次系統是後來才加的，在那之前加的堂數只寫進 members.remaining_credits，
-// 沒有對應的批次紀錄，導致這裡看起來「沒有任何堂數批次」。補一筆批次讓差額補齊，
-// 效期先設為永久有效，之後可以直接點「編輯」改成正確的到期日。
-async function backfillUntrackedCredits(lineUserId){
+// 補救舊資料：堂數批次系統是後來才加的，在那之前的堂數異動只直接改 members.remaining_credits，
+// 沒有經過批次，導致批次總和跟會員實際剩餘堂數對不上（甚至完全沒有批次紀錄）。
+// 這裡用「會員目前剩餘堂數」當作正確答案（因為預約時系統就是看這個欄位判斷能不能約），
+// 把批次紀錄校正到跟它一致：
+// 1. 完全沒有批次、但 total_credits 記得到歷史總量的話，補一筆代表這段歷史的批次
+// 2. 批次剩餘總和比實際剩餘少 → 補一筆差額（沒被追蹤到的堂數）
+// 3. 批次剩餘總和比實際剩餘多（舊資料不同步）→ 用「越快到期先扣」的規則把多的部分扣掉
+async function reconcileMemberCredits(lineUserId){
   const m = data.members.find(x=>x.line_user_id===lineUserId);
   if(!m) return;
+
+  if(memberBatches.length===0 && (m.total_credits||0) > 0){
+    const amount = m.total_credits;
+    const remaining = Math.max(0, Math.min(m.remaining_credits, amount));
+    await db.from('credit_batches').insert({ line_user_id: lineUserId, amount, remaining, expires_at: null });
+    await loadMemberBatches(lineUserId);
+    return;
+  }
+
   const tracked = memberBatches.reduce((s,b)=>s+b.remaining, 0);
   const gap = m.remaining_credits - tracked;
   if(gap > 0){
     await addCreditsToBatch(lineUserId, gap, null);
+    await loadMemberBatches(lineUserId);
+  } else if(gap < 0){
+    await consumeCreditsFromBatches(lineUserId, -gap);
     await loadMemberBatches(lineUserId);
   }
 }
