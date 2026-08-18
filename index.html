@@ -1485,7 +1485,17 @@ async function deleteBatch(batchId, lineUserId){
   if(!ok) return;
   const sync = confirm(`要同步從會員的「剩餘堂數」與「歷史總量」扣除這筆的數字嗎？\n\n選「確定」＝這筆本來就是真實堂數，刪除後會員的堂數也要跟著減少\n選「取消」＝這筆只是重複／打錯的紀錄，會員原本的堂數其實是對的，不要跟著變動`);
 
-  const { error } = await db.from('credit_batches').delete().eq('id', batchId);
+  let { error } = await db.from('credit_batches').delete().eq('id', batchId);
+  let zeroedInstead = false;
+
+  if(error && error.code === '23503'){
+    // 這筆批次已經被預約紀錄引用（外鍵保護），資料庫不允許真的刪除整筆，
+    // 改成把它歸零，效果一樣（不會再被算進任何堂數），但不會留下斷掉的關聯
+    const zeroRes = await db.from('credit_batches').update({ amount:0, remaining:0 }).eq('id', batchId);
+    if(zeroRes.error){ showToast('刪除失敗，歸零也失敗，請稍後再試'); console.error(zeroRes.error); return; }
+    error = null;
+    zeroedInstead = true;
+  }
   if(error){ showToast('刪除失敗'); console.error(error); return; }
 
   if(sync){
@@ -1501,7 +1511,11 @@ async function deleteBatch(batchId, lineUserId){
 
   await loadMemberBatches(lineUserId);
   render();
-  showToast(sync ? '已刪除這筆批次紀錄' : '已刪除這筆批次紀錄（未連動會員總量／剩餘堂數）');
+  if(zeroedInstead){
+    showToast('這筆批次已被預約紀錄引用，系統改成把它歸零（效果相同），沒有真的刪除整筆紀錄');
+  } else {
+    showToast(sync ? '已刪除這筆批次紀錄' : '已刪除這筆批次紀錄（未連動會員總量／剩餘堂數）');
+  }
 }
 
 async function setMemberCredits(lineUserId){
