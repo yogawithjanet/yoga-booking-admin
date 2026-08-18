@@ -1447,28 +1447,55 @@ function startEditBatch(batchId){ editingBatchId = batchId; render(); }
 function cancelEditBatch(){ editingBatchId = null; render(); }
 
 async function saveEditBatch(batchId, lineUserId){
+  const newAmount = Number(document.getElementById(`ebAmount-${batchId}`).value);
   const newRemaining = Number(document.getElementById(`ebRemaining-${batchId}`).value);
   const newExpiry = document.getElementById(`ebExpiry-${batchId}`).value || null;
+  if(isNaN(newAmount) || newAmount<0){ showToast('請輸入正確的原始堂數'); return; }
   if(isNaN(newRemaining) || newRemaining<0){ showToast('請輸入正確的剩餘堂數'); return; }
 
   const batch = memberBatches.find(b=>b.id===batchId);
   if(!batch) return;
-  const delta = newRemaining - batch.remaining; // 改動的差額，要同步反映到會員的剩餘堂數
+  const remainingDelta = newRemaining - batch.remaining; // 改動的差額，要同步反映到會員的剩餘堂數
+  const amountDelta = newAmount - batch.amount; // 原始堂數的改動，同步反映到會員的歷史總量
 
-  const { error } = await db.from('credit_batches').update({ remaining:newRemaining, expires_at:newExpiry }).eq('id', batchId);
+  const { error } = await db.from('credit_batches').update({ amount:newAmount, remaining:newRemaining, expires_at:newExpiry }).eq('id', batchId);
   if(error){ showToast('更新失敗'); console.error(error); return; }
 
-  if(delta !== 0){
+  if(remainingDelta !== 0 || amountDelta !== 0){
     const m = data.members.find(x=>x.line_user_id===lineUserId);
-    const newMemberRemaining = Math.max(0, (m ? m.remaining_credits : 0) + delta);
-    await db.from('members').update({ remaining_credits:newMemberRemaining }).eq('line_user_id', lineUserId);
-    if(m) m.remaining_credits = newMemberRemaining;
+    const newMemberRemaining = Math.max(0, (m ? m.remaining_credits : 0) + remainingDelta);
+    const newMemberTotal = Math.max(0, (m ? (m.total_credits||0) : 0) + amountDelta);
+    await db.from('members').update({ remaining_credits:newMemberRemaining, total_credits:newMemberTotal }).eq('line_user_id', lineUserId);
+    if(m){ m.remaining_credits = newMemberRemaining; m.total_credits = newMemberTotal; }
   }
 
   editingBatchId = null;
   await loadMemberBatches(lineUserId);
   render();
   showToast('已更新這批堂數');
+}
+
+async function deleteBatch(batchId, lineUserId){
+  const batch = memberBatches.find(b=>b.id===batchId);
+  if(!batch) return;
+  const ok = confirm(`確定要刪除這筆批次紀錄嗎？（原始堂數 ${batch.amount} 堂、剩餘 ${batch.remaining} 堂）\n通常用於刪除重複或錯誤的紀錄，刪除後會同步從會員的剩餘堂數與歷史總量扣除，無法復原。`);
+  if(!ok) return;
+
+  const { error } = await db.from('credit_batches').delete().eq('id', batchId);
+  if(error){ showToast('刪除失敗'); console.error(error); return; }
+
+  const m = data.members.find(x=>x.line_user_id===lineUserId);
+  if(m){
+    const newMemberRemaining = Math.max(0, m.remaining_credits - batch.remaining);
+    const newMemberTotal = Math.max(0, (m.total_credits||0) - batch.amount);
+    await db.from('members').update({ remaining_credits:newMemberRemaining, total_credits:newMemberTotal }).eq('line_user_id', lineUserId);
+    m.remaining_credits = newMemberRemaining;
+    m.total_credits = newMemberTotal;
+  }
+
+  await loadMemberBatches(lineUserId);
+  render();
+  showToast('已刪除這筆批次紀錄');
 }
 
 async function setMemberCredits(lineUserId){
@@ -1717,6 +1744,7 @@ function pageMemberDetail(){
             return `<tr>
               <td colspan="5">
                 <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:end;padding:8px 0;">
+                  <div class="field" style="width:auto;"><label>原始堂數</label><input id="ebAmount-${b.id}" type="number" value="${b.amount}" min="0" style="width:90px;"></div>
                   <div class="field" style="width:auto;"><label>剩餘堂數</label><input id="ebRemaining-${b.id}" type="number" value="${b.remaining}" min="0" style="width:90px;"></div>
                   <div class="field" style="width:auto;"><label>效期（留空＝永久有效）</label><input id="ebExpiry-${b.id}" type="date" value="${b.expires_at||''}"></div>
                   <button class="btn btn-ghost btn-sm" onclick="cancelEditBatch()">取消</button>
@@ -1730,7 +1758,10 @@ function pageMemberDetail(){
             <td>${b.amount} 堂</td>
             <td><b>${b.remaining}</b> 堂</td>
             <td>${expiryLabel}</td>
-            <td><button class="btn btn-ghost btn-sm" onclick="startEditBatch('${b.id}')">編輯</button></td>
+            <td><div class="row-actions">
+              <button class="btn btn-ghost btn-sm" onclick="startEditBatch('${b.id}')">編輯</button>
+              <button class="btn btn-danger btn-sm" onclick="deleteBatch('${b.id}','${m.line_user_id}')">刪除</button>
+            </div></td>
           </tr>`;
         }).join('') || '<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:16px;">目前沒有任何堂數批次紀錄</td></tr>'}</tbody></table>
       </div>
