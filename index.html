@@ -327,6 +327,8 @@ let data = {
 let selectedMemberId = null; // 學員管理：目前展開檢視的學員
 let memberBookings = [];     // 該學員的預約紀錄
 let memberBatches = [];      // 該學員的堂數批次（各自效期）
+let memberHistoryFilterStart = ''; // 選課歷史的日期篩選（開始）
+let memberHistoryFilterEnd = '';   // 選課歷史的日期篩選（結束）
 let editingBatchId = null;   // 目前正在編輯的堂數批次 id
 let memberSearchQuery = '';
 let memberSortBy = 'default'; // default | credits_desc | credits_asc | name
@@ -1524,6 +1526,8 @@ async function setMemberCredits(lineUserId){
 async function openMemberDetail(lineUserId){
   selectedMemberId = lineUserId;
   editingBatchId = null;
+  memberHistoryFilterStart = '';
+  memberHistoryFilterEnd = '';
   const [bookingsRes] = await Promise.all([
     db.from('bookings').select('*').eq('line_user_id', lineUserId).order('created_at', {ascending:false}),
     loadDayOverrides(),
@@ -1688,7 +1692,13 @@ function pageMemberDetail(){
     return new Date(y, mo-1, d, hh, mm) <= new Date();
   }
 
-  const historyRows = memberBookings.map(b=>{
+  const filteredBookings = memberBookings.filter(b=>{
+    if(!b.class_date_iso) return true; // 沒有 iso 日期的舊資料，不篩選掉
+    if(memberHistoryFilterStart && b.class_date_iso < memberHistoryFilterStart) return false;
+    if(memberHistoryFilterEnd && b.class_date_iso > memberHistoryFilterEnd) return false;
+    return true;
+  });
+  const historyRows = filteredBookings.map(b=>{
     const past = b.status==='active' && isBookingPast(b);
     const statusLabel = b.status!=='active' ? '已取消' : (past ? '已結束' : '已預約');
     const statusClass = b.status!=='active' ? 'off' : (past ? 'warn' : 'on');
@@ -1790,11 +1800,30 @@ function pageMemberDetail(){
 
     <div class="panel">
       <div class="panel-head"><h3>選課歷史</h3></div>
-      <div class="panel-body pad0">
+      <div class="panel-body" style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding-bottom:12px;">
+        <input type="date" id="mhFilterStart" value="${memberHistoryFilterStart}" style="border:1px solid var(--line);border-radius:8px;padding:6px 10px;font-size:12.5px;">
+        <span style="color:var(--muted);font-size:12px;">～</span>
+        <input type="date" id="mhFilterEnd" value="${memberHistoryFilterEnd}" style="border:1px solid var(--line);border-radius:8px;padding:6px 10px;font-size:12.5px;">
+        <button class="btn btn-primary btn-sm" onclick="applyMemberHistoryFilter()">套用</button>
+        ${(memberHistoryFilterStart || memberHistoryFilterEnd) ? `<button class="btn btn-ghost btn-sm" onclick="clearMemberHistoryFilter()">清除篩選</button>` : ''}
+        <span style="color:var(--muted);font-size:12px;">共 ${filteredBookings.length} / ${memberBookings.length} 筆</span>
+      </div>
+      <div class="panel-body pad0" style="border-top:1px solid var(--line);">
         <table><thead><tr><th>上課時間</th><th>課程</th><th>狀態</th><th></th></tr></thead>
-        <tbody>${historyRows || '<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:20px;">尚無任何預約紀錄</td></tr>'}</tbody></table>
+        <tbody>${historyRows || `<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:20px;">${memberBookings.length===0 ? '尚無任何預約紀錄' : '這段區間內沒有預約紀錄'}</td></tr>`}</tbody></table>
       </div>
     </div>`;
+}
+
+function applyMemberHistoryFilter(){
+  memberHistoryFilterStart = document.getElementById('mhFilterStart').value;
+  memberHistoryFilterEnd = document.getElementById('mhFilterEnd').value;
+  render();
+}
+function clearMemberHistoryFilter(){
+  memberHistoryFilterStart = '';
+  memberHistoryFilterEnd = '';
+  render();
 }
 
 function addDateRow(){
