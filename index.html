@@ -1275,6 +1275,7 @@ function pageMembers(){
           <button class="btn btn-ghost btn-sm" onclick="adjustMember('${m.line_user_id}', 1)">＋1</button>
           <button class="btn btn-ghost btn-sm" onclick="adjustMember('${m.line_user_id}', -1)">－1</button>
           <input type="number" id="setCredits-${m.line_user_id}" placeholder="輸入數字" style="width:70px;border:1px solid var(--line);border-radius:8px;padding:5px 8px;font-size:12.5px;">
+          <input type="date" id="setCreditsExpiry-${m.line_user_id}" title="增加堂數時的效期（留空＝永久有效），套用到「＋1」跟「設定」" style="width:128px;border:1px solid var(--line);border-radius:8px;padding:5px 6px;font-size:11.5px;">
           <button class="btn btn-primary btn-sm" onclick="setMemberCredits('${m.line_user_id}')">設定</button>
           <button class="btn btn-danger btn-sm" onclick="deleteMember('${m.line_user_id}')">刪除</button>
         </div>
@@ -1479,7 +1480,8 @@ async function setMemberCredits(lineUserId){
   const diff = val - m.remaining_credits;
 
   if(diff>0){
-    await addCreditsToBatch(lineUserId, diff, null); // 快速設定沒有指定效期，這批算永久有效
+    const expiresAt = getRowExpiryInput(lineUserId); // 讀取這一列的效期欄位，留空＝永久有效
+    await addCreditsToBatch(lineUserId, diff, expiresAt);
     const newTotal = (m.total_credits||0) + diff;
     await db.from('members').update({ remaining_credits: val, total_credits: newTotal }).eq('line_user_id', lineUserId);
     m.total_credits = newTotal;
@@ -1862,13 +1864,19 @@ async function adminCancelBooking(bookingId){
   showToast('已取消這筆預約，堂數已退還');
 }
 
+function getRowExpiryInput(lineUserId){
+  const el = document.getElementById(`setCreditsExpiry-${lineUserId}`);
+  return (el && el.value) ? el.value : null;
+}
+
 async function adjustMember(lineUserId, delta){
   const m = data.members.find(x=>x.line_user_id===lineUserId);
   if(!m) return;
   const newRemaining = Math.max(0, m.remaining_credits + delta);
 
   if(delta>0){
-    await addCreditsToBatch(lineUserId, delta, null); // 快速加堂沒有指定效期，算永久有效
+    const expiresAt = getRowExpiryInput(lineUserId); // 讀取這一列的效期欄位，留空＝永久有效
+    await addCreditsToBatch(lineUserId, delta, expiresAt);
     const newTotal = (m.total_credits||0) + delta;
     await db.from('members').update({ remaining_credits:newRemaining, total_credits:newTotal }).eq('line_user_id', lineUserId);
     m.total_credits = newTotal;
