@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>瑜珈團課預約系統｜後台管理</title>
+<title>團課預約系統｜後台管理</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="config.js"></script>
 <style>
@@ -270,7 +270,7 @@
 
 <div id="app" style="display:none;">
   <div class="sidebar">
-    <div class="brand" id="sidebarBrand">瑜珈時光<span>後台管理系統</span></div>
+    <div class="brand" id="sidebarBrand">團課教室<span>後台管理系統</span></div>
     <div class="nav-item active" data-page="overview"><span class="ic">📊</span>總覽</div>
     <div class="nav-item" data-page="store"><span class="ic">🏠</span>店家設定</div>
     <div class="nav-item" data-page="classes"><span class="ic">🗓️</span>課程設定</div>
@@ -313,7 +313,7 @@ function applyTheme(themeName){
 }
 
 let data = {
-  store: { name:'瑜珈時光', admin_password:'yoga1234', security_question:'', security_answer:'', theme:'sage', available_tags:[], tag_colors:{} },
+  store: { name:'團課教室', admin_password:'class1234', security_question:'', security_answer:'', theme:'sage', available_tags:[], tag_colors:{} },
   classes: [],   // class_templates
   teachers: [],
   members: [],
@@ -944,7 +944,7 @@ function pageTeachers(){
         <div class="form-grid">
           <div class="field"><label>姓名</label><input id="ntName" placeholder="例如：Rita"></div>
           <div class="field"><label>聯絡電話</label><input id="ntPhone" placeholder="09XX-XXX-XXX"></div>
-          <div class="field" style="grid-column:1/-1"><label>專長 / 簡介</label><input id="ntSpecialty" placeholder="例如：孕婦瑜珈 / 呼吸療癒"></div>
+          <div class="field" style="grid-column:1/-1"><label>專長 / 簡介</label><input id="ntSpecialty" placeholder="例如：兒童啟蒙 / 一對一指導"></div>
         </div>
       </div>
       <div class="add-bar"><button class="btn btn-primary" onclick="addTeacher()">＋ 新增老師</button></div>
@@ -993,7 +993,7 @@ function pageStore(){
       <div class="panel-head"><h3>基本資料</h3></div>
       <div class="panel-body">
         <div class="form-grid">
-          <div class="field"><label>店家 / 品牌名稱</label><input id="stName" value="${s.name}" placeholder="例如：瑜珈時光"></div>
+          <div class="field"><label>店家 / 品牌名稱</label><input id="stName" value="${s.name}" placeholder="例如：你的教室名稱"></div>
         </div>
       </div>
       <div class="add-bar"><button class="btn btn-primary" onclick="saveStore()">儲存設定</button></div>
@@ -1016,7 +1016,7 @@ function pageStore(){
       <div class="panel-body">
         <div class="hint-box">💡 如果忘記密碼，登入畫面可以點「忘記密碼？」，回答這個問題答對就能重設密碼。答案不分大小寫。</div>
         <div class="form-grid">
-          <div class="field" style="grid-column:1/-1"><label>安全問題</label><input id="stSecQ" value="${s.security_question||''}" placeholder="例如：你的瑜珈教室最早是在哪一年成立的？"></div>
+          <div class="field" style="grid-column:1/-1"><label>安全問題</label><input id="stSecQ" value="${s.security_question||''}" placeholder="例如：你的教室最早是在哪一年成立的？"></div>
           <div class="field" style="grid-column:1/-1"><label>答案</label><input id="stSecA" value="${s.security_answer||''}" placeholder="請設定答案"></div>
         </div>
       </div>
@@ -2200,7 +2200,7 @@ const SESSION_KEY = 'admin-logged-in-v1';
 function tryLogin(){
   const input = document.getElementById('loginPassword');
   const err = document.getElementById('loginErr');
-  const correctPw = data.store.admin_password || 'yoga1234';
+  const correctPw = data.store.admin_password || 'class1234';
   if(input.value === correctPw){
     localStorage.setItem(SESSION_KEY, '1'); // 記住這台裝置已登入，重新整理不用再輸入密碼
     document.getElementById('loginScreen').style.display = 'none';
