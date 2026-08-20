@@ -1744,7 +1744,17 @@ function pageMemberDetail(){
   // （已約課／已結束／未使用／已過期），完全依照 amount 跟實際預約紀錄反推，
   // 不依賴 remaining 欄位，避免舊資料的 remaining 不準確而連帶顯示錯誤。
   function batchStatusBreakdown(batch){
-    const linked = memberBookings.filter(bk => bk.credit_batch_id===batch.id && bk.status==='active');
+    // 很多較舊的預約紀錄（例如當初資料匯入時建立的）沒有寫入 credit_batch_id，
+    // 沒辦法直接看出是哪一批堂數。如果這位學員目前只有這一筆有效批次，
+    // 那些「沒有連結到任何批次」的預約，合理上就是從這一批扣的，
+    // 一併算進去；如果學員同時有多筆有效批次，沒連結的預約無法判斷歸屬，
+    // 就不勉強分配，避免算錯。
+    const activeBatches = memberBatches.filter(b => b.amount > 0);
+    const isOnlyActiveBatch = activeBatches.length===1 && activeBatches[0].id===batch.id;
+
+    const linked = memberBookings.filter(bk =>
+      bk.status==='active' && (bk.credit_batch_id===batch.id || (isOnlyActiveBatch && !bk.credit_batch_id))
+    );
     const booked = linked.filter(bk => !isBookingPast(bk)).length;
     const finished = linked.filter(bk => isBookingPast(bk)).length;
     const leftover = Math.max(0, batch.amount - booked - finished);
