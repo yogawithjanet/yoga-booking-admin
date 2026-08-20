@@ -1752,20 +1752,24 @@ function pageMemberDetail(){
   function computeBatchAssignments(){
     const activeBatches = [...memberBatches].filter(b=>b.amount>0)
       .sort((a,b)=> new Date(a.created_at) - new Date(b.created_at));
+    const activeBatchIds = new Set(activeBatches.map(b=>b.id));
     const activeBookings = memberBookings.filter(bk=>bk.status==='active');
-    const linkedBookings = activeBookings.filter(bk=>bk.credit_batch_id);
-    const unlinkedBookings = activeBookings.filter(bk=>!bk.credit_batch_id)
+    // 「有連結」只算連到還有效（原始堂數>0）的批次；如果連結到的批次後來被
+    // 歸零／作廢了，這筆預約就變成「孤兒」，要跟沒連結的預約一起重新分配，
+    // 不然這堂實際上過的課會直接消失不見，害其他批次被誤判成還有堂數沒用。
+    const linkedBookings = activeBookings.filter(bk=>bk.credit_batch_id && activeBatchIds.has(bk.credit_batch_id));
+    const orphanBookings = activeBookings.filter(bk=>!bk.credit_batch_id || !activeBatchIds.has(bk.credit_batch_id))
       .sort((a,b)=> new Date(a.created_at) - new Date(b.created_at));
 
     const assignment = {};
     activeBatches.forEach(b=>{ assignment[b.id] = []; });
-    linkedBookings.forEach(bk=>{ if(assignment[bk.credit_batch_id]) assignment[bk.credit_batch_id].push(bk); });
+    linkedBookings.forEach(bk=>{ assignment[bk.credit_batch_id].push(bk); });
 
     let idx = 0;
     for(const b of activeBatches){
       let capacity = b.amount - assignment[b.id].length;
-      while(capacity > 0 && idx < unlinkedBookings.length){
-        assignment[b.id].push(unlinkedBookings[idx]);
+      while(capacity > 0 && idx < orphanBookings.length){
+        assignment[b.id].push(orphanBookings[idx]);
         idx++; capacity--;
       }
     }
