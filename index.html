@@ -273,6 +273,7 @@
     <div class="brand" id="sidebarBrand">團課教室<span>後台管理系統</span></div>
     <div class="nav-item active" data-page="overview"><span class="ic">📊</span>總覽</div>
     <div class="nav-item" data-page="store"><span class="ic">🏠</span>店家設定</div>
+    <div class="nav-item" data-page="cashflow"><span class="ic">💰</span>金流管理</div>
     <div class="nav-item" data-page="classes"><span class="ic">🗓️</span>課程設定</div>
     <div class="nav-item" data-page="roster"><span class="ic">📋</span>每日名單</div>
     <div class="nav-item" data-page="members"><span class="ic">👥</span>學員管理</div>
@@ -327,8 +328,12 @@ let data = {
 let selectedMemberId = null; // 學員管理：目前展開檢視的學員
 let memberBookings = [];     // 該學員的預約紀錄
 let memberBatches = [];      // 該學員的堂數批次（各自效期）
-let memberHistoryFilterStart = ''; // 選課歷史的日期篩選（開始）
-let memberHistoryFilterEnd = '';   // 選課歷史的日期篩選（結束）
+let memberHistoryFilterStart = ''; // 選課紀錄的日期篩選（開始）
+let memberHistoryFilterEnd = '';   // 選課紀錄的日期篩選（結束）
+let memberBatchFilterStart = '';   // 堂數紀錄的日期篩選（開始）
+let memberBatchFilterEnd = '';     // 堂數紀錄的日期篩選（結束）
+let memberPaymentFilterStart = ''; // 消費紀錄的日期篩選（開始）
+let memberPaymentFilterEnd = '';   // 消費紀錄的日期篩選（結束）
 let editingBatchId = null;   // 目前正在編輯的堂數批次 id
 let memberSearchQuery = '';
 let memberSortBy = 'default'; // default | credits_desc | credits_asc | name
@@ -1442,8 +1447,8 @@ async function consumeCreditsFromBatches(lineUserId, count){
     left -= take;
   }
 }
-async function addCreditsToBatch(lineUserId, amount, expiresAt){
-  await db.from('credit_batches').insert({ line_user_id: lineUserId, amount, remaining: amount, expires_at: expiresAt });
+async function addCreditsToBatch(lineUserId, amount, expiresAt, amountPaid){
+  await db.from('credit_batches').insert({ line_user_id: lineUserId, amount, remaining: amount, expires_at: expiresAt, amount_paid: (amountPaid===undefined || amountPaid===null || isNaN(amountPaid)) ? null : amountPaid });
 }
 async function loadMemberBatches(lineUserId){
   const { data, error } = await db.from('credit_batches')
@@ -1552,6 +1557,10 @@ async function openMemberDetail(lineUserId){
   editingBatchId = null;
   memberHistoryFilterStart = '';
   memberHistoryFilterEnd = '';
+  memberBatchFilterStart = '';
+  memberBatchFilterEnd = '';
+  memberPaymentFilterStart = '';
+  memberPaymentFilterEnd = '';
   const [bookingsRes] = await Promise.all([
     db.from('bookings').select('*').eq('line_user_id', lineUserId).order('created_at', {ascending:false}),
     loadDayOverrides(),
@@ -1617,7 +1626,11 @@ async function addCreditsForCurrentMember(){
     expiresAt = todayISO(days);
   }
 
-  await addCreditsToBatch(lineUserId, amount, expiresAt);
+  const amountPaidInput = document.getElementById('mdAmountPaid').value.trim();
+  const amountPaid = amountPaidInput === '' ? null : Number(amountPaidInput);
+  if(amountPaidInput !== '' && (isNaN(amountPaid) || amountPaid<0)){ showToast('請輸入正確的金額'); return; }
+
+  await addCreditsToBatch(lineUserId, amount, expiresAt, amountPaid);
   const newRemaining = m.remaining_credits + amount;
   const newTotal = (m.total_credits||0) + amount;
   await db.from('members').update({ remaining_credits:newRemaining, total_credits:newTotal }).eq('line_user_id', lineUserId);
@@ -1626,7 +1639,7 @@ async function addCreditsForCurrentMember(){
 
   await loadMemberBatches(lineUserId);
   render();
-  showToast(`已新增 ${amount} 堂${expiresAt ? '，效期至 '+expiresAt : '（永久有效）'}`);
+  showToast(`已新增 ${amount} 堂${expiresAt ? '，效期至 '+expiresAt : '（永久有效）'}${amountPaid!==null ? '，實收 NT$'+amountPaid : ''}`);
 }
 
 function getClassOptionsHtml(){
@@ -1785,6 +1798,29 @@ function pageMemberDetail(){
     };
   }
 
+  const batchDateKey = b => new Date(b.created_at).toISOString().slice(0,10);
+  const filteredBatches = memberBatches.filter(b=>{
+    const key = batchDateKey(b);
+    if(memberBatchFilterStart && key < memberBatchFilterStart) return false;
+    if(memberBatchFilterEnd && key > memberBatchFilterEnd) return false;
+    return true;
+  });
+
+  const paymentRecords = memberBatches.filter(b=> b.amount_paid !== null && b.amount_paid !== undefined);
+  const filteredPayments = paymentRecords.filter(b=>{
+    const key = batchDateKey(b);
+    if(memberPaymentFilterStart && key < memberPaymentFilterStart) return false;
+    if(memberPaymentFilterEnd && key > memberPaymentFilterEnd) return false;
+    return true;
+  }).sort((a,b)=> new Date(b.created_at) - new Date(a.created_at));
+  const paymentTotal = filteredPayments.reduce((s,b)=> s + Number(b.amount_paid), 0);
+  const paymentRows = filteredPayments.map(b=>`
+    <tr>
+      <td>${new Date(b.created_at).toLocaleDateString('zh-TW')}</td>
+      <td>NT$ ${Number(b.amount_paid).toLocaleString()}</td>
+      <td>+${b.amount} 堂</td>
+    </tr>`).join('');
+
   return `
     <div class="page-title">
       <span style="cursor:pointer;color:var(--sage);font-size:14px;" onclick="backToMemberList()">← 返回學員列表</span>
@@ -1795,44 +1831,68 @@ function pageMemberDetail(){
     </div>
     <div class="page-sub">目前剩餘堂數：<b>${m.remaining_credits}</b> 堂</div>
 
-    <div class="panel">
-      <div class="panel-head"><h3>新增堂數</h3></div>
-      <div class="panel-body">
-        <div class="form-grid">
-          <div class="field"><label>堂數</label><input id="mdCreditAmount" type="number" value="10" min="1"></div>
-          <div class="field"><label>效期方式</label>
-            <select id="mdCreditExpiryType" onchange="onMemberDetailExpiryTypeChange(this.value)">
-              <option value="none">不設效期（永久有效）</option>
-              <option value="date">指定到期日</option>
-              <option value="days">幾天後到期</option>
-            </select>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start;">
+      <div class="panel">
+        <div class="panel-head"><h3>新增堂數</h3></div>
+        <div class="panel-body">
+          <div class="form-grid">
+            <div class="field"><label>堂數</label><input id="mdCreditAmount" type="number" value="10" min="1"></div>
+            <div class="field"><label>效期方式</label>
+              <select id="mdCreditExpiryType" onchange="onMemberDetailExpiryTypeChange(this.value)">
+                <option value="none">不設效期（永久有效）</option>
+                <option value="date">指定到期日</option>
+                <option value="days">幾天後到期</option>
+              </select>
+            </div>
+            <div class="field" id="mdExpiryDateField" style="display:none;"><label>到期日</label><input id="mdCreditExpiryDate" type="date"></div>
+            <div class="field" id="mdExpiryDaysField" style="display:none;"><label>幾天後到期</label><input id="mdCreditExpiryDays" type="number" value="30" min="1"></div>
+            <div class="field" style="grid-column:1/-1;"><label>實收金額（選填，NT$）</label><input id="mdAmountPaid" type="number" min="0" placeholder="有實際收款的話填這裡，用來算營收"></div>
           </div>
-          <div class="field" id="mdExpiryDateField" style="display:none;"><label>到期日</label><input id="mdCreditExpiryDate" type="date"></div>
-          <div class="field" id="mdExpiryDaysField" style="display:none;"><label>幾天後到期</label><input id="mdCreditExpiryDays" type="number" value="30" min="1"></div>
         </div>
+        <div class="add-bar"><button class="btn btn-primary" onclick="runCreditAction(addCreditsForCurrentMember)">＋ 新增這批堂數</button></div>
       </div>
-      <div class="add-bar"><button class="btn btn-primary" onclick="runCreditAction(addCreditsForCurrentMember)">＋ 新增這批堂數</button></div>
+
+      <div class="panel">
+        <div class="panel-head"><h3>幫學員新增預約</h3></div>
+        <div class="panel-body">
+          <div class="hint-box">💡 選課程後，可以一次選多個日期（點「＋新增一個日期」增加欄位），系統會逐一檢查每個日期的星期是否有開這堂課；每成功一筆會自動扣 1 堂。選「⭐ 特別課」的話，日期欄位會被忽略，系統自動使用該堂課設定好的日期。</div>
+          <div class="form-grid">
+            <div class="field" style="grid-column:1/-1;">
+              <label>上課日期（可多選，僅固定課程需要）</label>
+              <div id="adNewDatesContainer">
+                <div class="date-row" style="display:flex;gap:6px;margin-bottom:6px;">
+                  <input type="date" class="adDateInput" style="flex:1;border:1px solid var(--line);border-radius:9px;padding:9px 11px;font-size:13px;background:var(--paper);color:var(--ink);">
+                  <button type="button" class="btn btn-ghost btn-sm" onclick="removeDateRow(this)">✕</button>
+                </div>
+              </div>
+              <button type="button" class="btn btn-ghost btn-sm" onclick="addDateRow()">＋ 新增一個日期</button>
+            </div>
+            <div class="field"><label>課程</label><select id="adNewClass">${getClassOptionsHtml() || '<option value="">尚無課程可選</option>'}</select></div>
+          </div>
+        </div>
+        <div class="add-bar"><button class="btn btn-primary" onclick="adminAddBooking('${m.line_user_id}')">＋ 新增這些預約</button></div>
+      </div>
     </div>
 
     <div class="panel">
-      <div class="panel-head"><h3>幫學員新增預約</h3></div>
-      <div class="panel-body">
-        <div class="hint-box">💡 選課程後，可以一次選多個日期（點「＋新增一個日期」增加欄位），系統會逐一檢查每個日期的星期是否有開這堂課；每成功一筆會自動扣 1 堂。選「⭐ 特別課」的話，日期欄位會被忽略，系統自動使用該堂課設定好的日期。</div>
-        <div class="form-grid">
-          <div class="field" style="grid-column:1/-1;">
-            <label>上課日期（可多選，僅固定課程需要）</label>
-            <div id="adNewDatesContainer">
-              <div class="date-row" style="display:flex;gap:6px;margin-bottom:6px;">
-                <input type="date" class="adDateInput" style="flex:1;border:1px solid var(--line);border-radius:9px;padding:9px 11px;font-size:13px;background:var(--paper);color:var(--ink);">
-                <button type="button" class="btn btn-ghost btn-sm" onclick="removeDateRow(this)">✕</button>
-              </div>
-            </div>
-            <button type="button" class="btn btn-ghost btn-sm" onclick="addDateRow()">＋ 新增一個日期</button>
-          </div>
-          <div class="field"><label>課程</label><select id="adNewClass">${getClassOptionsHtml() || '<option value="">尚無課程可選</option>'}</select></div>
+      <div class="panel-head"><h3>消費金額紀錄</h3></div>
+      <div class="panel-body" style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding-bottom:12px;">
+        <input type="date" id="mpFilterStart" value="${memberPaymentFilterStart}" style="border:1px solid var(--line);border-radius:8px;padding:6px 10px;font-size:12.5px;">
+        <span style="color:var(--muted);font-size:12px;">～</span>
+        <input type="date" id="mpFilterEnd" value="${memberPaymentFilterEnd}" style="border:1px solid var(--line);border-radius:8px;padding:6px 10px;font-size:12.5px;">
+        <button class="btn btn-primary btn-sm" onclick="applyMemberPaymentFilter()">套用</button>
+        ${(memberPaymentFilterStart || memberPaymentFilterEnd) ? `<button class="btn btn-ghost btn-sm" onclick="clearMemberPaymentFilter()">清除篩選</button>` : ''}
+      </div>
+      <div class="panel-body" style="padding-top:0;padding-bottom:16px;">
+        <div class="stat-card" style="display:inline-block;min-width:180px;">
+          <div class="num">NT$ ${paymentTotal.toLocaleString()}</div>
+          <div class="lbl">${(memberPaymentFilterStart || memberPaymentFilterEnd) ? '篩選區間消費總額' : '消費總額（全部）'}</div>
         </div>
       </div>
-      <div class="add-bar"><button class="btn btn-primary" onclick="adminAddBooking('${m.line_user_id}')">＋ 新增這些預約</button></div>
+      <div class="panel-body pad0" style="border-top:1px solid var(--line);">
+        <table><thead><tr><th>日期</th><th>金額</th><th>備註</th></tr></thead>
+        <tbody>${paymentRows || `<tr><td colspan="3" style="text-align:center;color:var(--muted);padding:20px;">${paymentRecords.length===0 ? '尚無消費金額紀錄' : '這段區間內沒有消費紀錄'}</td></tr>`}</tbody></table>
+      </div>
     </div>
 
     <div class="panel">
@@ -1841,9 +1901,17 @@ function pageMemberDetail(){
       <div class="panel-body" style="padding-bottom:6px;">
         <div style="font-size:14px;font-weight:700;">堂數紀錄</div>
       </div>
-      <div class="panel-body pad0">
+      <div class="panel-body" style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding-top:0;padding-bottom:12px;">
+        <input type="date" id="mbFilterStart" value="${memberBatchFilterStart}" style="border:1px solid var(--line);border-radius:8px;padding:6px 10px;font-size:12.5px;">
+        <span style="color:var(--muted);font-size:12px;">～</span>
+        <input type="date" id="mbFilterEnd" value="${memberBatchFilterEnd}" style="border:1px solid var(--line);border-radius:8px;padding:6px 10px;font-size:12.5px;">
+        <button class="btn btn-primary btn-sm" onclick="applyMemberBatchFilter()">套用</button>
+        ${(memberBatchFilterStart || memberBatchFilterEnd) ? `<button class="btn btn-ghost btn-sm" onclick="clearMemberBatchFilter()">清除篩選</button>` : ''}
+        <span style="color:var(--muted);font-size:12px;">共 ${filteredBatches.length} / ${memberBatches.length} 筆</span>
+      </div>
+      <div class="panel-body pad0" style="border-top:1px solid var(--line);">
         <table><thead><tr><th>加入時間</th><th>原始堂數</th><th>狀態</th><th>效期</th><th></th></tr></thead>
-        <tbody>${memberBatches.map(b=>{
+        <tbody>${filteredBatches.map(b=>{
           const isExpired = b.expires_at && b.expires_at < todayISO(0);
           const expiryLabel = b.expires_at
             ? (isExpired ? `<span style="color:var(--danger);">已過期（${b.expires_at}）</span>` : b.expires_at)
@@ -1885,7 +1953,7 @@ function pageMemberDetail(){
               <button class="btn btn-danger btn-sm" onclick="runCreditAction(()=>deleteBatch('${b.id}','${m.line_user_id}'))">刪除</button>
             </div></td>
           </tr>`;
-        }).join('') || '<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:16px;">目前沒有任何堂數批次紀錄</td></tr>'}</tbody></table>
+        }).join('') || `<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:16px;">${memberBatches.length===0 ? '目前沒有任何堂數批次紀錄' : '這段區間內沒有堂數批次紀錄'}</td></tr>`}</tbody></table>
       </div>
 
       <div class="panel-body" style="padding-top:22px;padding-bottom:6px;border-top:1px solid var(--line);">
@@ -1914,6 +1982,28 @@ function applyMemberHistoryFilter(){
 function clearMemberHistoryFilter(){
   memberHistoryFilterStart = '';
   memberHistoryFilterEnd = '';
+  render();
+}
+
+function applyMemberBatchFilter(){
+  memberBatchFilterStart = document.getElementById('mbFilterStart').value;
+  memberBatchFilterEnd = document.getElementById('mbFilterEnd').value;
+  render();
+}
+function clearMemberBatchFilter(){
+  memberBatchFilterStart = '';
+  memberBatchFilterEnd = '';
+  render();
+}
+
+function applyMemberPaymentFilter(){
+  memberPaymentFilterStart = document.getElementById('mpFilterStart').value;
+  memberPaymentFilterEnd = document.getElementById('mpFilterEnd').value;
+  render();
+}
+function clearMemberPaymentFilter(){
+  memberPaymentFilterStart = '';
+  memberPaymentFilterEnd = '';
   render();
 }
 
@@ -2167,7 +2257,119 @@ function pageTeacherLog(){
     </div>` : ''}`;
 }
 
-const PAGES = {overview:pageOverview, store:pageStore, classes:pageClasses, teachers:pageTeachers, members:pageMembers, roster:pageRoster, teacherlog:pageTeacherLog};
+/* ================= 金流管理 ================= */
+// 這裡的營收數字完全來自「新增堂數」時填的實收金額（amount_paid），
+// 沒有填的批次不列入計算——不是每一筆堂數異動都代表真的有收錢
+// （例如系統校正、贈送的堂數），所以不能直接用堂數推算營收。
+let cashflowRecords = null;
+let cashflowFilterStart = '';
+let cashflowFilterEnd = '';
+
+async function loadCashflowData(){
+  const { data: batches, error } = await db.from('credit_batches')
+    .select('line_user_id, amount, amount_paid, created_at')
+    .not('amount_paid', 'is', null)
+    .order('created_at', { ascending:false });
+  cashflowRecords = (!error && batches) ? batches : [];
+}
+async function loadCashflowAndRender(){
+  await loadCashflowData();
+  render();
+}
+function applyCashflowFilter(){
+  cashflowFilterStart = document.getElementById('cfFilterStart').value;
+  cashflowFilterEnd = document.getElementById('cfFilterEnd').value;
+  render();
+}
+function clearCashflowFilter(){
+  cashflowFilterStart = '';
+  cashflowFilterEnd = '';
+  render();
+}
+function setCashflowThisMonth(){
+  const now = new Date();
+  const start = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-01`;
+  cashflowFilterStart = start;
+  cashflowFilterEnd = todayISO(0);
+  render();
+}
+
+function pageCashflow(){
+  if(!cashflowRecords){
+    return `<div class="page-title">金流管理</div><div class="page-sub">正在載入收款紀錄...</div>`;
+  }
+  const dateKey = r => new Date(r.created_at).toISOString().slice(0,10);
+  const now = new Date();
+  const thisMonthPrefix = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+  const thisMonthTotal = cashflowRecords
+    .filter(r => dateKey(r).startsWith(thisMonthPrefix))
+    .reduce((s,r)=> s + Number(r.amount_paid), 0);
+
+  const filtered = cashflowRecords.filter(r=>{
+    const key = dateKey(r);
+    if(cashflowFilterStart && key < cashflowFilterStart) return false;
+    if(cashflowFilterEnd && key > cashflowFilterEnd) return false;
+    return true;
+  });
+  const filteredTotal = filtered.reduce((s,r)=> s + Number(r.amount_paid), 0);
+
+  const rows = filtered.map(r=>`
+    <tr>
+      <td>${new Date(r.created_at).toLocaleDateString('zh-TW')}</td>
+      <td>${memberName(r.line_user_id)}</td>
+      <td>NT$ ${Number(r.amount_paid).toLocaleString()}</td>
+      <td>+${r.amount} 堂</td>
+    </tr>`).join('');
+
+  // 依學員彙總消費總額（依篩選區間），由高到低排序
+  const byMember = {};
+  filtered.forEach(r=>{
+    byMember[r.line_user_id] = (byMember[r.line_user_id]||0) + Number(r.amount_paid);
+  });
+  const memberRanking = Object.entries(byMember)
+    .sort((a,b)=> b[1]-a[1])
+    .map(([uid, total])=> `
+      <tr><td>${memberName(uid)}</td><td>NT$ ${total.toLocaleString()}</td></tr>`).join('');
+
+  return `
+    <div class="page-title">金流管理</div>
+    <div class="page-sub">統計「新增堂數」時有填實收金額的紀錄，沒有填金額的堂數異動（例如系統校正、贈送）不會算進來。</div>
+
+    <div class="stat-cards">
+      <div class="stat-card"><div class="num">NT$ ${thisMonthTotal.toLocaleString()}</div><div class="lbl">本月營收</div></div>
+      <div class="stat-card"><div class="num">NT$ ${filteredTotal.toLocaleString()}</div><div class="lbl">${(cashflowFilterStart||cashflowFilterEnd) ? '篩選區間營收' : '全部總營收'}</div></div>
+      <div class="stat-card"><div class="num">${filtered.length}</div><div class="lbl">${(cashflowFilterStart||cashflowFilterEnd) ? '篩選區間筆數' : '全部收款筆數'}</div></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head">
+        <h3>收款紀錄</h3>
+        <button class="btn btn-ghost btn-sm" onclick="runCreditAction(loadCashflowAndRender)">🔄 重新整理</button>
+      </div>
+      <div class="panel-body" style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;">
+        <input type="date" id="cfFilterStart" value="${cashflowFilterStart}" style="border:1px solid var(--line);border-radius:8px;padding:6px 10px;font-size:12.5px;">
+        <span style="color:var(--muted);font-size:12px;">～</span>
+        <input type="date" id="cfFilterEnd" value="${cashflowFilterEnd}" style="border:1px solid var(--line);border-radius:8px;padding:6px 10px;font-size:12.5px;">
+        <button class="btn btn-primary btn-sm" onclick="applyCashflowFilter()">套用</button>
+        <button class="btn btn-ghost btn-sm" onclick="setCashflowThisMonth()">本月</button>
+        ${(cashflowFilterStart || cashflowFilterEnd) ? `<button class="btn btn-ghost btn-sm" onclick="clearCashflowFilter()">清除篩選</button>` : ''}
+      </div>
+      <div class="panel-body pad0" style="border-top:1px solid var(--line);">
+        <table><thead><tr><th>日期</th><th>學員</th><th>金額</th><th>堂數</th></tr></thead>
+        <tbody>${rows || `<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:20px;">${cashflowRecords.length===0 ? '尚無收款紀錄' : '這段區間內沒有收款紀錄'}</td></tr>`}</tbody></table>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h3>依學員排序的消費總額${(cashflowFilterStart||cashflowFilterEnd) ? '（篩選區間）' : ''}</h3></div>
+      <div class="panel-body pad0">
+        <table><thead><tr><th>學員</th><th>消費總額</th></tr></thead>
+        <tbody>${memberRanking || '<tr><td colspan="2" style="text-align:center;color:var(--muted);padding:20px;">尚無資料</td></tr>'}</tbody></table>
+      </div>
+    </div>`;
+}
+
+const PAGES = {overview:pageOverview, store:pageStore, cashflow:pageCashflow, classes:pageClasses, teachers:pageTeachers, members:pageMembers, roster:pageRoster, teacherlog:pageTeacherLog};
 
 function render(){
   document.getElementById('sidebarBrand').innerHTML = data.store.name + '<span>後台管理系統</span>';
@@ -2188,6 +2390,7 @@ async function navigateToPage(page){
   if(page==='members'){ await loadMemberStats(); await loadDayOverrides(); }
   if(page==='roster'){ await loadRoster(); }
   if(page==='teacherlog'){ await loadTeacherLog(teacherLogSelected || (data.teachers[0] && data.teachers[0].name) || ''); }
+  if(page==='cashflow'){ await loadCashflowData(); }
   render();
 }
 
