@@ -328,6 +328,7 @@ let data = {
 let selectedMemberId = null; // 學員管理：目前展開檢視的學員
 let memberBookings = [];     // 該學員的預約紀錄
 let memberBatches = [];      // 該學員的堂數批次（各自效期）
+let memberTransactions = []; // 該學員的金流紀錄（消費金額）
 let memberHistoryFilterStart = ''; // 選課紀錄的日期篩選（開始）
 let memberHistoryFilterEnd = '';   // 選課紀錄的日期篩選（結束）
 let memberBatchFilterStart = '';   // 堂數紀錄的日期篩選（開始）
@@ -1212,17 +1213,24 @@ async function submitBatchCredits(){
     expiresAt = todayISO(days);
   }
 
+  const amountPaidInput = document.getElementById('bcAmountPaid').value.trim();
+  const amountPaid = amountPaidInput === '' ? null : Number(amountPaidInput);
+  if(amountPaidInput !== '' && (isNaN(amountPaid) || amountPaid<0)){ showToast('請輸入正確的金額'); return; }
+
   for(const lineUserId of memberIds){
-    await addCreditsToBatch(lineUserId, amount, expiresAt);
+    const batchId = await addCreditsToBatch(lineUserId, amount, expiresAt);
     const m = data.members.find(x=>x.line_user_id===lineUserId);
     const newRemaining = (m ? m.remaining_credits : 0) + amount;
     const newTotal = (m ? m.total_credits : 0) + amount;
     await db.from('members').update({ remaining_credits:newRemaining, total_credits:newTotal }).eq('line_user_id', lineUserId);
     if(m){ m.remaining_credits = newRemaining; m.total_credits = newTotal; }
+    if(amountPaid !== null){
+      await insertTransaction({ type:'income', amount:amountPaid, note:`＋${amount} 堂`, lineUserId, creditBatchId: batchId });
+    }
   }
 
   render();
-  showToast(`已幫 ${memberIds.length} 位學員新增 ${amount} 堂${expiresAt ? '，效期至 '+expiresAt : '（永久有效）'}`);
+  showToast(`已幫 ${memberIds.length} 位學員新增 ${amount} 堂${expiresAt ? '，效期至 '+expiresAt : '（永久有效）'}${amountPaid!==null ? '，每人實收 NT$'+amountPaid : ''}`);
 }
 
 function sortColumn(col){
@@ -1339,6 +1347,7 @@ function pageMembers(){
         </div>
         <div class="action-field" id="bcDateField" style="display:none;"><label>到期日</label><input id="bcExpiryDate" type="date"></div>
         <div class="action-field" id="bcDaysField" style="display:none;"><label>幾天後到期</label><input id="bcExpiryDays" type="number" value="30" min="1"></div>
+        <div class="action-field"><label>實收金額（選填，NT$／每人）</label><input id="bcAmountPaid" type="number" min="0" placeholder="每人都收這個金額的話可以填"></div>
         <button class="action-btn-full primary" onclick="runCreditAction(submitBatchCredits)">＋ 新增這批堂數</button>
       </div>
 
@@ -1447,13 +1456,31 @@ async function consumeCreditsFromBatches(lineUserId, count){
     left -= take;
   }
 }
-async function addCreditsToBatch(lineUserId, amount, expiresAt, amountPaid){
-  await db.from('credit_batches').insert({ line_user_id: lineUserId, amount, remaining: amount, expires_at: expiresAt, amount_paid: (amountPaid===undefined || amountPaid===null || isNaN(amountPaid)) ? null : amountPaid });
+async function addCreditsToBatch(lineUserId, amount, expiresAt){
+  const { data, error } = await db.from('credit_batches')
+    .insert({ line_user_id: lineUserId, amount, remaining: amount, expires_at: expiresAt })
+    .select('id').single();
+  return (!error && data) ? data.id : null;
+}
+
+// 金流紀錄（收入／支出）共用寫入函式。amount 一律存正數，type 決定是收入還是支出。
+async function insertTransaction({ type, amount, note, lineUserId, creditBatchId, occurredAt }){
+  await db.from('transactions').insert({
+    type, amount, note: note || '',
+    line_user_id: lineUserId || null,
+    credit_batch_id: creditBatchId || null,
+    occurred_at: occurredAt || todayISO(0)
+  });
 }
 async function loadMemberBatches(lineUserId){
   const { data, error } = await db.from('credit_batches')
     .select('*').eq('line_user_id', lineUserId).order('expires_at', { ascending:true, nullsFirst:false });
   memberBatches = (!error && data) ? data : [];
+}
+async function loadMemberTransactions(lineUserId){
+  const { data, error } = await db.from('transactions')
+    .select('*').eq('line_user_id', lineUserId).order('occurred_at', { ascending:false });
+  memberTransactions = (!error && data) ? data : [];
 }
 
 function startEditBatch(batchId){ editingBatchId = batchId; render(); }
@@ -1564,7 +1591,8 @@ async function openMemberDetail(lineUserId){
   const [bookingsRes] = await Promise.all([
     db.from('bookings').select('*').eq('line_user_id', lineUserId).order('created_at', {ascending:false}),
     loadDayOverrides(),
-    loadMemberBatches(lineUserId)
+    loadMemberBatches(lineUserId),
+    loadMemberTransactions(lineUserId)
   ]);
   memberBookings = bookingsRes.data || [];
   await reconcileMemberCredits(lineUserId);
@@ -1630,14 +1658,19 @@ async function addCreditsForCurrentMember(){
   const amountPaid = amountPaidInput === '' ? null : Number(amountPaidInput);
   if(amountPaidInput !== '' && (isNaN(amountPaid) || amountPaid<0)){ showToast('請輸入正確的金額'); return; }
 
-  await addCreditsToBatch(lineUserId, amount, expiresAt, amountPaid);
+  const batchId = await addCreditsToBatch(lineUserId, amount, expiresAt);
   const newRemaining = m.remaining_credits + amount;
   const newTotal = (m.total_credits||0) + amount;
   await db.from('members').update({ remaining_credits:newRemaining, total_credits:newTotal }).eq('line_user_id', lineUserId);
   m.remaining_credits = newRemaining;
   m.total_credits = newTotal;
 
+  if(amountPaid !== null){
+    await insertTransaction({ type:'income', amount:amountPaid, note:`＋${amount} 堂`, lineUserId, creditBatchId: batchId });
+  }
+
   await loadMemberBatches(lineUserId);
+  await loadMemberTransactions(lineUserId);
   render();
   showToast(`已新增 ${amount} 堂${expiresAt ? '，效期至 '+expiresAt : '（永久有效）'}${amountPaid!==null ? '，實收 NT$'+amountPaid : ''}`);
 }
@@ -1806,19 +1839,18 @@ function pageMemberDetail(){
     return true;
   });
 
-  const paymentRecords = memberBatches.filter(b=> b.amount_paid !== null && b.amount_paid !== undefined);
-  const filteredPayments = paymentRecords.filter(b=>{
-    const key = batchDateKey(b);
-    if(memberPaymentFilterStart && key < memberPaymentFilterStart) return false;
-    if(memberPaymentFilterEnd && key > memberPaymentFilterEnd) return false;
+  const paymentRecords = memberTransactions.filter(t=> t.type==='income');
+  const filteredPayments = paymentRecords.filter(t=>{
+    if(memberPaymentFilterStart && t.occurred_at < memberPaymentFilterStart) return false;
+    if(memberPaymentFilterEnd && t.occurred_at > memberPaymentFilterEnd) return false;
     return true;
-  }).sort((a,b)=> new Date(b.created_at) - new Date(a.created_at));
-  const paymentTotal = filteredPayments.reduce((s,b)=> s + Number(b.amount_paid), 0);
-  const paymentRows = filteredPayments.map(b=>`
+  }).sort((a,b)=> new Date(b.occurred_at) - new Date(a.occurred_at));
+  const paymentTotal = filteredPayments.reduce((s,t)=> s + Number(t.amount), 0);
+  const paymentRows = filteredPayments.map(t=>`
     <tr>
-      <td>${new Date(b.created_at).toLocaleDateString('zh-TW')}</td>
-      <td>NT$ ${Number(b.amount_paid).toLocaleString()}</td>
-      <td>+${b.amount} 堂</td>
+      <td>${t.occurred_at}</td>
+      <td>NT$ ${Number(t.amount).toLocaleString()}</td>
+      <td>${t.note || '—'}</td>
     </tr>`).join('');
 
   return `
@@ -1831,8 +1863,8 @@ function pageMemberDetail(){
     </div>
     <div class="page-sub">目前剩餘堂數：<b>${m.remaining_credits}</b> 堂</div>
 
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start;">
-      <div class="panel">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:stretch;">
+      <div class="panel" style="display:flex;flex-direction:column;">
         <div class="panel-head"><h3>新增堂數</h3></div>
         <div class="panel-body">
           <div class="form-grid">
@@ -1849,10 +1881,10 @@ function pageMemberDetail(){
             <div class="field" style="grid-column:1/-1;"><label>實收金額（選填，NT$）</label><input id="mdAmountPaid" type="number" min="0" placeholder="有實際收款的話填這裡，用來算營收"></div>
           </div>
         </div>
-        <div class="add-bar"><button class="btn btn-primary" onclick="runCreditAction(addCreditsForCurrentMember)">＋ 新增這批堂數</button></div>
+        <div class="add-bar" style="margin-top:auto;"><button class="btn btn-primary" onclick="runCreditAction(addCreditsForCurrentMember)">＋ 新增這批堂數</button></div>
       </div>
 
-      <div class="panel">
+      <div class="panel" style="display:flex;flex-direction:column;">
         <div class="panel-head"><h3>幫學員新增預約</h3></div>
         <div class="panel-body">
           <div class="hint-box">💡 選課程後，可以一次選多個日期（點「＋新增一個日期」增加欄位），系統會逐一檢查每個日期的星期是否有開這堂課；每成功一筆會自動扣 1 堂。選「⭐ 特別課」的話，日期欄位會被忽略，系統自動使用該堂課設定好的日期。</div>
@@ -1870,7 +1902,7 @@ function pageMemberDetail(){
             <div class="field"><label>課程</label><select id="adNewClass">${getClassOptionsHtml() || '<option value="">尚無課程可選</option>'}</select></div>
           </div>
         </div>
-        <div class="add-bar"><button class="btn btn-primary" onclick="adminAddBooking('${m.line_user_id}')">＋ 新增這些預約</button></div>
+        <div class="add-bar" style="margin-top:auto;"><button class="btn btn-primary" onclick="adminAddBooking('${m.line_user_id}')">＋ 新增這些預約</button></div>
       </div>
     </div>
 
@@ -2258,19 +2290,19 @@ function pageTeacherLog(){
 }
 
 /* ================= 金流管理 ================= */
-// 這裡的營收數字完全來自「新增堂數」時填的實收金額（amount_paid），
-// 沒有填的批次不列入計算——不是每一筆堂數異動都代表真的有收錢
-// （例如系統校正、贈送的堂數），所以不能直接用堂數推算營收。
+// 收入／支出都記在 transactions 這張表。「新增堂數」時填的實收金額會
+// 自動連動產生一筆收入紀錄（credit_batch_id 指回那批堂數）；這個頁面
+// 也可以直接手動新增任何一筆收入或支出（不用綁堂數），並且能編輯／刪除。
+// 淨利＝收入－支出。
 let cashflowRecords = null;
 let cashflowFilterStart = '';
 let cashflowFilterEnd = '';
+let editingTransactionId = null;
 
 async function loadCashflowData(){
-  const { data: batches, error } = await db.from('credit_batches')
-    .select('line_user_id, amount, amount_paid, created_at')
-    .not('amount_paid', 'is', null)
-    .order('created_at', { ascending:false });
-  cashflowRecords = (!error && batches) ? batches : [];
+  const { data, error } = await db.from('transactions')
+    .select('*').order('occurred_at', { ascending:false });
+  cashflowRecords = (!error && data) ? data : [];
 }
 async function loadCashflowAndRender(){
   await loadCashflowData();
@@ -2288,62 +2320,162 @@ function clearCashflowFilter(){
 }
 function setCashflowThisMonth(){
   const now = new Date();
-  const start = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-01`;
-  cashflowFilterStart = start;
+  cashflowFilterStart = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-01`;
   cashflowFilterEnd = todayISO(0);
   render();
 }
 
+function memberOptionsHtml(selectedUid){
+  return `<option value="">（不指定學員）</option>` + data.members.map(m=>
+    `<option value="${m.line_user_id}" ${selectedUid===m.line_user_id?'selected':''}>${m.display_name||'（未知學員）'}</option>`
+  ).join('');
+}
+
+async function submitManualTransaction(){
+  const type = document.getElementById('txType').value;
+  const amount = Number(document.getElementById('txAmount').value);
+  if(!amount || amount<=0){ showToast('請輸入正確的金額'); return; }
+  const occurredAt = document.getElementById('txDate').value || todayISO(0);
+  const lineUserId = document.getElementById('txMember').value || null;
+  const note = document.getElementById('txNote').value.trim();
+
+  await insertTransaction({ type, amount, note, lineUserId, occurredAt });
+  await loadCashflowData();
+  render();
+  showToast(`已新增一筆${type==='income'?'收入':'支出'}：NT$ ${amount.toLocaleString()}`);
+}
+
+function startEditTransaction(id){ editingTransactionId = id; render(); }
+function cancelEditTransaction(){ editingTransactionId = null; render(); }
+
+async function saveEditTransaction(id){
+  const type = document.getElementById(`txEditType-${id}`).value;
+  const amount = Number(document.getElementById(`txEditAmount-${id}`).value);
+  if(!amount || amount<=0){ showToast('請輸入正確的金額'); return; }
+  const occurredAt = document.getElementById(`txEditDate-${id}`).value;
+  const lineUserId = document.getElementById(`txEditMember-${id}`).value || null;
+  const note = document.getElementById(`txEditNote-${id}`).value.trim();
+
+  const { error } = await db.from('transactions')
+    .update({ type, amount, occurred_at: occurredAt, line_user_id: lineUserId, note })
+    .eq('id', id);
+  if(error){ showToast('更新失敗'); console.error(error); return; }
+
+  editingTransactionId = null;
+  await loadCashflowData();
+  render();
+  showToast('已更新這筆紀錄');
+}
+
+async function deleteTransactionRow(id){
+  const ok = confirm('確定要刪除這筆金流紀錄嗎？這只會刪除這筆收支紀錄本身，不會動到相關的堂數或會員資料，無法復原。');
+  if(!ok) return;
+  const { error } = await db.from('transactions').delete().eq('id', id);
+  if(error){ showToast('刪除失敗'); console.error(error); return; }
+  await loadCashflowData();
+  render();
+  showToast('已刪除這筆紀錄');
+}
+
 function pageCashflow(){
   if(!cashflowRecords){
-    return `<div class="page-title">金流管理</div><div class="page-sub">正在載入收款紀錄...</div>`;
+    return `<div class="page-title">金流管理</div><div class="page-sub">正在載入收支紀錄...</div>`;
   }
-  const dateKey = r => new Date(r.created_at).toISOString().slice(0,10);
   const now = new Date();
   const thisMonthPrefix = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
-  const thisMonthTotal = cashflowRecords
-    .filter(r => dateKey(r).startsWith(thisMonthPrefix))
-    .reduce((s,r)=> s + Number(r.amount_paid), 0);
+  const sumByType = (list, type) => list.filter(r=>r.type===type).reduce((s,r)=> s + Number(r.amount), 0);
+
+  const thisMonthRecords = cashflowRecords.filter(r => r.occurred_at.startsWith(thisMonthPrefix));
+  const thisMonthIncome = sumByType(thisMonthRecords, 'income');
+  const thisMonthExpense = sumByType(thisMonthRecords, 'expense');
 
   const filtered = cashflowRecords.filter(r=>{
-    const key = dateKey(r);
-    if(cashflowFilterStart && key < cashflowFilterStart) return false;
-    if(cashflowFilterEnd && key > cashflowFilterEnd) return false;
+    if(cashflowFilterStart && r.occurred_at < cashflowFilterStart) return false;
+    if(cashflowFilterEnd && r.occurred_at > cashflowFilterEnd) return false;
     return true;
   });
-  const filteredTotal = filtered.reduce((s,r)=> s + Number(r.amount_paid), 0);
+  const filteredIncome = sumByType(filtered, 'income');
+  const filteredExpense = sumByType(filtered, 'expense');
+  const hasFilter = cashflowFilterStart || cashflowFilterEnd;
 
-  const rows = filtered.map(r=>`
+  const rows = filtered.map(r=>{
+    const isEditing = editingTransactionId === r.id;
+    if(isEditing){
+      return `<tr>
+        <td colspan="6">
+          <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:end;padding:8px 0;">
+            <div class="field" style="width:auto;"><label>類型</label>
+              <select id="txEditType-${r.id}" style="width:90px;">
+                <option value="income" ${r.type==='income'?'selected':''}>收入</option>
+                <option value="expense" ${r.type==='expense'?'selected':''}>支出</option>
+              </select>
+            </div>
+            <div class="field" style="width:auto;"><label>日期</label><input id="txEditDate-${r.id}" type="date" value="${r.occurred_at}"></div>
+            <div class="field" style="width:auto;"><label>金額</label><input id="txEditAmount-${r.id}" type="number" min="0" value="${r.amount}" style="width:100px;"></div>
+            <div class="field" style="width:auto;"><label>學員（選填）</label><select id="txEditMember-${r.id}">${memberOptionsHtml(r.line_user_id)}</select></div>
+            <div class="field" style="width:auto;"><label>備註</label><input id="txEditNote-${r.id}" value="${r.note||''}" style="width:160px;"></div>
+            <button class="btn btn-ghost btn-sm" onclick="cancelEditTransaction()">取消</button>
+            <button class="btn btn-primary btn-sm" onclick="runCreditAction(()=>saveEditTransaction('${r.id}'))">儲存</button>
+          </div>
+        </td>
+      </tr>`;
+    }
+    return `
     <tr>
-      <td>${new Date(r.created_at).toLocaleDateString('zh-TW')}</td>
-      <td>${memberName(r.line_user_id)}</td>
-      <td>NT$ ${Number(r.amount_paid).toLocaleString()}</td>
-      <td>+${r.amount} 堂</td>
-    </tr>`).join('');
+      <td>${r.occurred_at}</td>
+      <td><span class="tag ${r.type==='income'?'on':'off'}">${r.type==='income'?'收入':'支出'}</span></td>
+      <td>${r.line_user_id ? memberName(r.line_user_id) : '—'}</td>
+      <td style="color:${r.type==='income'?'var(--sage-dark)':'var(--danger)'};font-weight:700;">${r.type==='income'?'+':'－'}NT$ ${Number(r.amount).toLocaleString()}</td>
+      <td>${r.note || '—'}</td>
+      <td><div class="row-actions">
+        <button class="btn btn-ghost btn-sm" onclick="startEditTransaction('${r.id}')">編輯</button>
+        <button class="btn btn-danger btn-sm" onclick="runCreditAction(()=>deleteTransactionRow('${r.id}'))">刪除</button>
+      </div></td>
+    </tr>`;
+  }).join('');
 
-  // 依學員彙總消費總額（依篩選區間），由高到低排序
+  // 依學員彙總「收入」總額（依篩選區間），由高到低排序
   const byMember = {};
-  filtered.forEach(r=>{
-    byMember[r.line_user_id] = (byMember[r.line_user_id]||0) + Number(r.amount_paid);
+  filtered.filter(r=>r.type==='income' && r.line_user_id).forEach(r=>{
+    byMember[r.line_user_id] = (byMember[r.line_user_id]||0) + Number(r.amount);
   });
   const memberRanking = Object.entries(byMember)
     .sort((a,b)=> b[1]-a[1])
-    .map(([uid, total])=> `
-      <tr><td>${memberName(uid)}</td><td>NT$ ${total.toLocaleString()}</td></tr>`).join('');
+    .map(([uid, total])=> `<tr><td>${memberName(uid)}</td><td>NT$ ${total.toLocaleString()}</td></tr>`).join('');
 
   return `
     <div class="page-title">金流管理</div>
-    <div class="page-sub">統計「新增堂數」時有填實收金額的紀錄，沒有填金額的堂數異動（例如系統校正、贈送）不會算進來。</div>
+    <div class="page-sub">收入／支出都可以在下面手動新增，或是在學員的「新增堂數」順便填實收金額自動產生一筆收入。淨利＝收入－支出。</div>
 
     <div class="stat-cards">
-      <div class="stat-card"><div class="num">NT$ ${thisMonthTotal.toLocaleString()}</div><div class="lbl">本月營收</div></div>
-      <div class="stat-card"><div class="num">NT$ ${filteredTotal.toLocaleString()}</div><div class="lbl">${(cashflowFilterStart||cashflowFilterEnd) ? '篩選區間營收' : '全部總營收'}</div></div>
-      <div class="stat-card"><div class="num">${filtered.length}</div><div class="lbl">${(cashflowFilterStart||cashflowFilterEnd) ? '篩選區間筆數' : '全部收款筆數'}</div></div>
+      <div class="stat-card"><div class="num">NT$ ${thisMonthIncome.toLocaleString()}</div><div class="lbl">本月收入</div></div>
+      <div class="stat-card"><div class="num">NT$ ${thisMonthExpense.toLocaleString()}</div><div class="lbl">本月支出</div></div>
+      <div class="stat-card"><div class="num">NT$ ${(thisMonthIncome-thisMonthExpense).toLocaleString()}</div><div class="lbl">本月淨利</div></div>
+      <div class="stat-card"><div class="num">NT$ ${(filteredIncome-filteredExpense).toLocaleString()}</div><div class="lbl">${hasFilter ? '篩選區間淨利' : '全部總淨利'}</div></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h3>手動新增一筆收入／支出</h3></div>
+      <div class="panel-body">
+        <div class="form-grid">
+          <div class="field"><label>類型</label>
+            <select id="txType">
+              <option value="income">收入</option>
+              <option value="expense">支出</option>
+            </select>
+          </div>
+          <div class="field"><label>金額（NT$）</label><input id="txAmount" type="number" min="0" placeholder="例如：3000"></div>
+          <div class="field"><label>日期</label><input id="txDate" type="date" value="${todayISO(0)}"></div>
+          <div class="field"><label>學員（選填，通常收入才會指定）</label><select id="txMember">${memberOptionsHtml('')}</select></div>
+          <div class="field" style="grid-column:1/-1;"><label>備註</label><input id="txNote" placeholder="例如：場地租金、教材採購、10堂課程"></div>
+        </div>
+      </div>
+      <div class="add-bar"><button class="btn btn-primary" onclick="runCreditAction(submitManualTransaction)">＋ 新增這筆</button></div>
     </div>
 
     <div class="panel">
       <div class="panel-head">
-        <h3>收款紀錄</h3>
+        <h3>收支紀錄</h3>
         <button class="btn btn-ghost btn-sm" onclick="runCreditAction(loadCashflowAndRender)">🔄 重新整理</button>
       </div>
       <div class="panel-body" style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;">
@@ -2352,16 +2484,16 @@ function pageCashflow(){
         <input type="date" id="cfFilterEnd" value="${cashflowFilterEnd}" style="border:1px solid var(--line);border-radius:8px;padding:6px 10px;font-size:12.5px;">
         <button class="btn btn-primary btn-sm" onclick="applyCashflowFilter()">套用</button>
         <button class="btn btn-ghost btn-sm" onclick="setCashflowThisMonth()">本月</button>
-        ${(cashflowFilterStart || cashflowFilterEnd) ? `<button class="btn btn-ghost btn-sm" onclick="clearCashflowFilter()">清除篩選</button>` : ''}
+        ${hasFilter ? `<button class="btn btn-ghost btn-sm" onclick="clearCashflowFilter()">清除篩選</button>` : ''}
       </div>
       <div class="panel-body pad0" style="border-top:1px solid var(--line);">
-        <table><thead><tr><th>日期</th><th>學員</th><th>金額</th><th>堂數</th></tr></thead>
-        <tbody>${rows || `<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:20px;">${cashflowRecords.length===0 ? '尚無收款紀錄' : '這段區間內沒有收款紀錄'}</td></tr>`}</tbody></table>
+        <table><thead><tr><th>日期</th><th>類型</th><th>學員</th><th>金額</th><th>備註</th><th></th></tr></thead>
+        <tbody>${rows || `<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:20px;">${cashflowRecords.length===0 ? '尚無收支紀錄' : '這段區間內沒有收支紀錄'}</td></tr>`}</tbody></table>
       </div>
     </div>
 
     <div class="panel">
-      <div class="panel-head"><h3>依學員排序的消費總額${(cashflowFilterStart||cashflowFilterEnd) ? '（篩選區間）' : ''}</h3></div>
+      <div class="panel-head"><h3>依學員排序的消費總額${hasFilter ? '（篩選區間）' : ''}</h3></div>
       <div class="panel-body pad0">
         <table><thead><tr><th>學員</th><th>消費總額</th></tr></thead>
         <tbody>${memberRanking || '<tr><td colspan="2" style="text-align:center;color:var(--muted);padding:20px;">尚無資料</td></tr>'}</tbody></table>
