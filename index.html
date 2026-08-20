@@ -1729,6 +1729,22 @@ function pageMemberDetail(){
     </tr>`;
   }).join('');
 
+  // 堂數紀錄：每一批堂數依「加入時間」分一列，把這批的堂數依目前狀態分類
+  // （已約課／已結束／未使用／已過期），完全依照 amount 跟實際預約紀錄反推，
+  // 不依賴 remaining 欄位，避免舊資料的 remaining 不準確而連帶顯示錯誤。
+  function batchStatusBreakdown(batch){
+    const linked = memberBookings.filter(bk => bk.credit_batch_id===batch.id && bk.status==='active');
+    const booked = linked.filter(bk => !isBookingPast(bk)).length;
+    const finished = linked.filter(bk => isBookingPast(bk)).length;
+    const leftover = Math.max(0, batch.amount - booked - finished);
+    const isExpired = batch.expires_at && batch.expires_at < todayISO(0);
+    return {
+      booked, finished,
+      expired: isExpired ? leftover : 0,
+      unused: isExpired ? 0 : leftover
+    };
+  }
+
   return `
     <div class="page-title">
       <span style="cursor:pointer;color:var(--sage);font-size:14px;" onclick="backToMemberList()">← 返回學員列表</span>
@@ -1759,9 +1775,34 @@ function pageMemberDetail(){
     </div>
 
     <div class="panel">
-      <div class="panel-head"><h3>目前的堂數批次</h3></div>
+      <div class="panel-head"><h3>幫學員新增預約</h3></div>
+      <div class="panel-body">
+        <div class="hint-box">💡 選課程後，可以一次選多個日期（點「＋新增一個日期」增加欄位），系統會逐一檢查每個日期的星期是否有開這堂課；每成功一筆會自動扣 1 堂。選「⭐ 特別課」的話，日期欄位會被忽略，系統自動使用該堂課設定好的日期。</div>
+        <div class="form-grid">
+          <div class="field" style="grid-column:1/-1;">
+            <label>上課日期（可多選，僅固定課程需要）</label>
+            <div id="adNewDatesContainer">
+              <div class="date-row" style="display:flex;gap:6px;margin-bottom:6px;">
+                <input type="date" class="adDateInput" style="flex:1;border:1px solid var(--line);border-radius:9px;padding:9px 11px;font-size:13px;background:var(--paper);color:var(--ink);">
+                <button type="button" class="btn btn-ghost btn-sm" onclick="removeDateRow(this)">✕</button>
+              </div>
+            </div>
+            <button type="button" class="btn btn-ghost btn-sm" onclick="addDateRow()">＋ 新增一個日期</button>
+          </div>
+          <div class="field"><label>課程</label><select id="adNewClass">${getClassOptionsHtml() || '<option value="">尚無課程可選</option>'}</select></div>
+        </div>
+      </div>
+      <div class="add-bar"><button class="btn btn-primary" onclick="adminAddBooking('${m.line_user_id}')">＋ 新增這些預約</button></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h3>堂數與選課紀錄</h3></div>
+
+      <div class="panel-body" style="padding-bottom:6px;">
+        <div style="font-size:14px;font-weight:700;">堂數紀錄</div>
+      </div>
       <div class="panel-body pad0">
-        <table><thead><tr><th>加入時間</th><th>原始堂數</th><th>剩餘</th><th>效期</th><th></th></tr></thead>
+        <table><thead><tr><th>加入時間</th><th>原始堂數</th><th>狀態</th><th>效期</th><th></th></tr></thead>
         <tbody>${memberBatches.map(b=>{
           const isExpired = b.expires_at && b.expires_at < todayISO(0);
           const expiryLabel = b.expires_at
@@ -1784,10 +1825,20 @@ function pageMemberDetail(){
               </td>
             </tr>`;
           }
-          return `<tr style="${b.remaining<=0?'opacity:.45;':''}">
+          let statusDesc = '—'; // 原始堂數是 0 的話（通常是已歸零的重複／作廢紀錄），不需要再算狀態明細
+          if(b.amount > 0){
+            const bd = batchStatusBreakdown(b);
+            const parts = [];
+            if(bd.booked>0) parts.push(`${bd.booked} 堂已約課`);
+            if(bd.finished>0) parts.push(`${bd.finished} 堂已結束`);
+            if(bd.unused>0) parts.push(`${bd.unused} 堂未使用`);
+            if(bd.expired>0) parts.push(`${bd.expired} 堂已過期`);
+            statusDesc = parts.join('、') || '—';
+          }
+          return `<tr style="${b.amount<=0?'opacity:.45;':''}">
             <td>${new Date(b.created_at).toLocaleDateString('zh-TW')}</td>
             <td>${b.amount} 堂</td>
-            <td><b>${b.remaining}</b> 堂</td>
+            <td>${statusDesc}</td>
             <td>${expiryLabel}</td>
             <td><div class="row-actions">
               <button class="btn btn-ghost btn-sm" onclick="startEditBatch('${b.id}')">編輯</button>
@@ -1796,32 +1847,11 @@ function pageMemberDetail(){
           </tr>`;
         }).join('') || '<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:16px;">目前沒有任何堂數批次紀錄</td></tr>'}</tbody></table>
       </div>
-    </div>
 
-    <div class="panel">
-      <div class="panel-head"><h3>幫學員新增預約</h3></div>
-      <div class="panel-body">
-        <div class="hint-box">💡 選課程後，可以一次選多個日期（點「＋新增一個日期」增加欄位），系統會逐一檢查每個日期的星期是否有開這堂課；每成功一筆會自動扣 1 堂。選「⭐ 特別課」的話，日期欄位會被忽略，系統自動使用該堂課設定好的日期。</div>
-        <div class="form-grid">
-          <div class="field" style="grid-column:1/-1;">
-            <label>上課日期（可多選，僅固定課程需要）</label>
-            <div id="adNewDatesContainer">
-              <div class="date-row" style="display:flex;gap:6px;margin-bottom:6px;">
-                <input type="date" class="adDateInput" style="flex:1;border:1px solid var(--line);border-radius:9px;padding:9px 11px;font-size:13px;background:var(--paper);color:var(--ink);">
-                <button type="button" class="btn btn-ghost btn-sm" onclick="removeDateRow(this)">✕</button>
-              </div>
-            </div>
-            <button type="button" class="btn btn-ghost btn-sm" onclick="addDateRow()">＋ 新增一個日期</button>
-          </div>
-          <div class="field"><label>課程</label><select id="adNewClass">${getClassOptionsHtml() || '<option value="">尚無課程可選</option>'}</select></div>
-        </div>
+      <div class="panel-body" style="padding-top:22px;padding-bottom:6px;border-top:1px solid var(--line);">
+        <div style="font-size:14px;font-weight:700;">選課紀錄</div>
       </div>
-      <div class="add-bar"><button class="btn btn-primary" onclick="adminAddBooking('${m.line_user_id}')">＋ 新增這些預約</button></div>
-    </div>
-
-    <div class="panel">
-      <div class="panel-head"><h3>選課歷史</h3></div>
-      <div class="panel-body" style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding-bottom:12px;">
+      <div class="panel-body" style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding-top:0;padding-bottom:12px;">
         <input type="date" id="mhFilterStart" value="${memberHistoryFilterStart}" style="border:1px solid var(--line);border-radius:8px;padding:6px 10px;font-size:12.5px;">
         <span style="color:var(--muted);font-size:12px;">～</span>
         <input type="date" id="mhFilterEnd" value="${memberHistoryFilterEnd}" style="border:1px solid var(--line);border-radius:8px;padding:6px 10px;font-size:12.5px;">
