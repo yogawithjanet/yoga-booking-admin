@@ -2234,15 +2234,36 @@ function pageRoster(){
 /* ================= 老師教學紀錄 ================= */
 let teacherLogSelected = data.teachers[0] ? data.teachers[0].name : '';
 let teacherLogData = [];
+let teacherLogPopularityPage = 1;
+const TEACHER_LOG_POPULARITY_PAGE_SIZE = 10;
+let teacherLogFilterStart = '';
+let teacherLogFilterEnd = '';
 
 async function loadTeacherLog(teacherName){
   teacherLogSelected = teacherName;
+  teacherLogPopularityPage = 1;
+  teacherLogFilterStart = '';
+  teacherLogFilterEnd = '';
   if(!teacherName){ teacherLogData = []; return; }
   const { data: rows, error } = await db.from('bookings').select('*').eq('teacher', teacherName);
   teacherLogData = (!error && rows) ? rows : [];
 }
 async function onTeacherLogChange(val){
   await loadTeacherLog(val);
+  render();
+}
+function changeTeacherLogPopularityPage(delta){
+  teacherLogPopularityPage = Math.max(1, teacherLogPopularityPage + delta);
+  render();
+}
+function applyTeacherLogFilter(){
+  teacherLogFilterStart = document.getElementById('tlFilterStart').value;
+  teacherLogFilterEnd = document.getElementById('tlFilterEnd').value;
+  render();
+}
+function clearTeacherLogFilter(){
+  teacherLogFilterStart = '';
+  teacherLogFilterEnd = '';
   render();
 }
 
@@ -2279,11 +2300,19 @@ function pageTeacherLog(){
   const grouped = {};
   teacherLogData.forEach(b=>{
     const key = b.class_key;
-    if(!grouped[key]) grouped[key] = { title:b.class_title, date:b.class_date, time:b.class_time, active:0, cancelled:0 };
+    if(!grouped[key]) grouped[key] = { title:b.class_title, date:b.class_date, dateIso:b.class_date_iso, time:b.class_time, active:0, cancelled:0 };
     if(b.status==='active') grouped[key].active++; else grouped[key].cancelled++;
   });
-  const sessions = Object.values(grouped).sort((a,b)=> (a.date+a.time) < (b.date+b.time) ? 1 : -1);
-  const totalStudents = sessions.reduce((s,x)=>s+x.active, 0);
+  const allSessions = Object.values(grouped).sort((a,b)=> (a.date+a.time) < (b.date+b.time) ? 1 : -1);
+  const totalStudents = allSessions.reduce((s,x)=>s+x.active, 0);
+
+  const sessions = allSessions.filter(s=>{
+    if(!s.dateIso) return true; // 沒有 iso 日期的舊資料，不篩選掉
+    if(teacherLogFilterStart && s.dateIso < teacherLogFilterStart) return false;
+    if(teacherLogFilterEnd && s.dateIso > teacherLogFilterEnd) return false;
+    return true;
+  });
+  const hasLogFilter = teacherLogFilterStart || teacherLogFilterEnd;
 
   const rows = sessions.map(s=>`
     <tr>
@@ -2293,7 +2322,10 @@ function pageTeacherLog(){
     </tr>`).join('');
 
   const popularityGroups = summarizeClassPopularity(teacherLogData);
-  const popularityRows = popularityGroups.map(g=>`
+  const popularityTotalPages = Math.max(1, Math.ceil(popularityGroups.length / TEACHER_LOG_POPULARITY_PAGE_SIZE));
+  if(teacherLogPopularityPage > popularityTotalPages) teacherLogPopularityPage = popularityTotalPages;
+  const popularityPageStart = (teacherLogPopularityPage - 1) * TEACHER_LOG_POPULARITY_PAGE_SIZE;
+  const popularityRows = popularityGroups.slice(popularityPageStart, popularityPageStart + TEACHER_LOG_POPULARITY_PAGE_SIZE).map(g=>`
     <tr>
       <td>${g.title}</td>
       <td>${g.time}</td>
@@ -2317,7 +2349,7 @@ function pageTeacherLog(){
     </div>
     ${teacherLogSelected ? `
     <div class="stat-cards" style="grid-template-columns:repeat(2,1fr);">
-      <div class="stat-card"><div class="num">${sessions.length}</div><div class="lbl">總開課次數</div></div>
+      <div class="stat-card"><div class="num">${allSessions.length}</div><div class="lbl">總開課次數</div></div>
       <div class="stat-card"><div class="num">${totalStudents}</div><div class="lbl">累計參與學員人次</div></div>
     </div>
     <div class="panel">
@@ -2326,12 +2358,25 @@ function pageTeacherLog(){
         <table><thead><tr><th>課程</th><th>時段</th><th>開課次數</th><th>累計參與人次</th><th>平均額滿率</th></tr></thead>
         <tbody>${popularityRows || '<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:20px;">這位老師尚無開課紀錄</td></tr>'}</tbody></table>
       </div>
+      <div class="panel-body" style="display:flex;align-items:center;justify-content:center;gap:12px;border-top:1px solid var(--line);">
+        <button class="btn btn-ghost btn-sm" onclick="changeTeacherLogPopularityPage(-1)" ${teacherLogPopularityPage<=1?'disabled':''}>‹ 上一頁</button>
+        <span style="font-size:12.5px;color:var(--muted);">第 ${teacherLogPopularityPage} / ${popularityTotalPages} 頁（共 ${popularityGroups.length} 堂課）</span>
+        <button class="btn btn-ghost btn-sm" onclick="changeTeacherLogPopularityPage(1)" ${teacherLogPopularityPage>=popularityTotalPages?'disabled':''}>下一頁 ›</button>
+      </div>
     </div>
     <div class="panel">
       <div class="panel-head"><h3>開課紀錄</h3></div>
-      <div class="panel-body pad0">
+      <div class="panel-body" style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;">
+        <input type="date" id="tlFilterStart" value="${teacherLogFilterStart}" style="border:1px solid var(--line);border-radius:8px;padding:6px 10px;font-size:12.5px;">
+        <span style="color:var(--muted);font-size:12px;">～</span>
+        <input type="date" id="tlFilterEnd" value="${teacherLogFilterEnd}" style="border:1px solid var(--line);border-radius:8px;padding:6px 10px;font-size:12.5px;">
+        <button class="btn btn-primary btn-sm" onclick="applyTeacherLogFilter()">套用</button>
+        ${hasLogFilter ? `<button class="btn btn-ghost btn-sm" onclick="clearTeacherLogFilter()">清除篩選</button>` : ''}
+        <span style="color:var(--muted);font-size:12px;">共 ${sessions.length} / ${allSessions.length} 場</span>
+      </div>
+      <div class="panel-body pad0" style="border-top:1px solid var(--line);">
         <table><thead><tr><th>上課時間</th><th>課程</th><th>參與人數</th></tr></thead>
-        <tbody>${rows || '<tr><td colspan="3" style="text-align:center;color:var(--muted);padding:20px;">這位老師尚無開課紀錄</td></tr>'}</tbody></table>
+        <tbody>${rows || `<tr><td colspan="3" style="text-align:center;color:var(--muted);padding:20px;">${allSessions.length===0 ? '這位老師尚無開課紀錄' : '這段區間內沒有開課紀錄'}</td></tr>`}</tbody></table>
       </div>
     </div>` : ''}`;
 }
