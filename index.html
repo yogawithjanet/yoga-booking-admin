@@ -2298,6 +2298,8 @@ let cashflowRecords = null;
 let cashflowFilterStart = '';
 let cashflowFilterEnd = '';
 let editingTransactionId = null;
+let cashflowRankingPage = 1;
+const CASHFLOW_RANKING_PAGE_SIZE = 10;
 
 async function loadCashflowData(){
   const { data, error } = await db.from('transactions')
@@ -2311,17 +2313,24 @@ async function loadCashflowAndRender(){
 function applyCashflowFilter(){
   cashflowFilterStart = document.getElementById('cfFilterStart').value;
   cashflowFilterEnd = document.getElementById('cfFilterEnd').value;
+  cashflowRankingPage = 1;
   render();
 }
 function clearCashflowFilter(){
   cashflowFilterStart = '';
   cashflowFilterEnd = '';
+  cashflowRankingPage = 1;
   render();
 }
 function setCashflowThisMonth(){
   const now = new Date();
   cashflowFilterStart = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-01`;
   cashflowFilterEnd = todayISO(0);
+  cashflowRankingPage = 1;
+  render();
+}
+function changeCashflowRankingPage(delta){
+  cashflowRankingPage = Math.max(1, cashflowRankingPage + delta);
   render();
 }
 
@@ -2330,19 +2339,30 @@ function memberOptionsHtml(selectedUid){
     `<option value="${m.line_user_id}" ${selectedUid===m.line_user_id?'selected':''}>${m.display_name||'（未知學員）'}</option>`
   ).join('');
 }
+function memberMultiOptionsHtml(){
+  return data.members.map(m=>
+    `<option value="${m.line_user_id}">${m.display_name||'（未知學員）'}</option>`
+  ).join('');
+}
 
 async function submitManualTransaction(){
   const type = document.getElementById('txType').value;
   const amount = Number(document.getElementById('txAmount').value);
   if(!amount || amount<=0){ showToast('請輸入正確的金額'); return; }
   const occurredAt = document.getElementById('txDate').value || todayISO(0);
-  const lineUserId = document.getElementById('txMember').value || null;
+  const selectedUids = [...document.getElementById('txMember').selectedOptions].map(o=>o.value);
   const note = document.getElementById('txNote').value.trim();
 
-  await insertTransaction({ type, amount, note, lineUserId, occurredAt });
+  if(selectedUids.length===0){
+    await insertTransaction({ type, amount, note, lineUserId:null, occurredAt });
+  } else {
+    for(const lineUserId of selectedUids){
+      await insertTransaction({ type, amount, note, lineUserId, occurredAt });
+    }
+  }
   await loadCashflowData();
   render();
-  showToast(`已新增一筆${type==='income'?'收入':'支出'}：NT$ ${amount.toLocaleString()}`);
+  showToast(`已新增 ${Math.max(1, selectedUids.length)} 筆${type==='income'?'收入':'支出'}：每筆 NT$ ${amount.toLocaleString()}`);
 }
 
 function startEditTransaction(id){ editingTransactionId = id; render(); }
@@ -2434,14 +2454,18 @@ function pageCashflow(){
     </tr>`;
   }).join('');
 
-  // 依學員彙總「收入」總額（依篩選區間），由高到低排序
+  // 依學員彙總「收入」總額（依篩選區間），由高到低排序，每頁 10 名
   const byMember = {};
   filtered.filter(r=>r.type==='income' && r.line_user_id).forEach(r=>{
     byMember[r.line_user_id] = (byMember[r.line_user_id]||0) + Number(r.amount);
   });
-  const memberRanking = Object.entries(byMember)
-    .sort((a,b)=> b[1]-a[1])
-    .map(([uid, total])=> `<tr><td>${memberName(uid)}</td><td>NT$ ${total.toLocaleString()}</td></tr>`).join('');
+  const rankingList = Object.entries(byMember).sort((a,b)=> b[1]-a[1]);
+  const rankingTotalPages = Math.max(1, Math.ceil(rankingList.length / CASHFLOW_RANKING_PAGE_SIZE));
+  if(cashflowRankingPage > rankingTotalPages) cashflowRankingPage = rankingTotalPages;
+  const rankingStart = (cashflowRankingPage - 1) * CASHFLOW_RANKING_PAGE_SIZE;
+  const rankingPageItems = rankingList.slice(rankingStart, rankingStart + CASHFLOW_RANKING_PAGE_SIZE);
+  const memberRanking = rankingPageItems
+    .map(([uid, total], i)=> `<tr><td>${rankingStart + i + 1}</td><td>${memberName(uid)}</td><td>NT$ ${total.toLocaleString()}</td></tr>`).join('');
 
   return `
     <div class="page-title">金流管理</div>
@@ -2454,23 +2478,42 @@ function pageCashflow(){
       <div class="stat-card"><div class="num">NT$ ${(filteredIncome-filteredExpense).toLocaleString()}</div><div class="lbl">${hasFilter ? '篩選區間淨利' : '全部總淨利'}</div></div>
     </div>
 
-    <div class="panel">
-      <div class="panel-head"><h3>手動新增一筆收入／支出</h3></div>
-      <div class="panel-body">
-        <div class="form-grid">
-          <div class="field"><label>類型</label>
-            <select id="txType">
-              <option value="income">收入</option>
-              <option value="expense">支出</option>
-            </select>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:stretch;">
+      <div class="panel" style="display:flex;flex-direction:column;">
+        <div class="panel-head"><h3>手動新增一筆收入／支出</h3></div>
+        <div class="panel-body">
+          <div class="form-grid">
+            <div class="field"><label>類型</label>
+              <select id="txType">
+                <option value="income">收入</option>
+                <option value="expense">支出</option>
+              </select>
+            </div>
+            <div class="field"><label>金額（NT$）</label><input id="txAmount" type="number" min="0" placeholder="例如：3000"></div>
+            <div class="field"><label>日期</label><input id="txDate" type="date" value="${todayISO(0)}"></div>
+            <div class="field" style="grid-column:1/-1;">
+              <label>學員（選填，可多選，通常收入才會指定；按住 Cmd／Ctrl 可複選）</label>
+              <select id="txMember" multiple size="5" style="height:auto;">${memberMultiOptionsHtml()}</select>
+              <div class="desc" style="margin-top:4px;">選多位學員的話，每人各記一筆一樣金額的紀錄；不選就是不指定學員的一筆。</div>
+            </div>
+            <div class="field" style="grid-column:1/-1;"><label>備註</label><input id="txNote" placeholder="例如：場地租金、教材採購、10堂課程"></div>
           </div>
-          <div class="field"><label>金額（NT$）</label><input id="txAmount" type="number" min="0" placeholder="例如：3000"></div>
-          <div class="field"><label>日期</label><input id="txDate" type="date" value="${todayISO(0)}"></div>
-          <div class="field"><label>學員（選填，通常收入才會指定）</label><select id="txMember">${memberOptionsHtml('')}</select></div>
-          <div class="field" style="grid-column:1/-1;"><label>備註</label><input id="txNote" placeholder="例如：場地租金、教材採購、10堂課程"></div>
+        </div>
+        <div class="add-bar" style="margin-top:auto;"><button class="btn btn-primary" onclick="runCreditAction(submitManualTransaction)">＋ 新增這筆</button></div>
+      </div>
+
+      <div class="panel" style="display:flex;flex-direction:column;">
+        <div class="panel-head"><h3>依學員排序的消費總額${hasFilter ? '（篩選區間）' : ''}</h3></div>
+        <div class="panel-body pad0">
+          <table><thead><tr><th>#</th><th>學員</th><th>消費總額</th></tr></thead>
+          <tbody>${memberRanking || '<tr><td colspan="3" style="text-align:center;color:var(--muted);padding:20px;">尚無資料</td></tr>'}</tbody></table>
+        </div>
+        <div class="panel-body" style="margin-top:auto;display:flex;align-items:center;justify-content:center;gap:12px;border-top:1px solid var(--line);">
+          <button class="btn btn-ghost btn-sm" onclick="changeCashflowRankingPage(-1)" ${cashflowRankingPage<=1?'disabled':''}>‹ 上一頁</button>
+          <span style="font-size:12.5px;color:var(--muted);">第 ${cashflowRankingPage} / ${rankingTotalPages} 頁（共 ${rankingList.length} 位）</span>
+          <button class="btn btn-ghost btn-sm" onclick="changeCashflowRankingPage(1)" ${cashflowRankingPage>=rankingTotalPages?'disabled':''}>下一頁 ›</button>
         </div>
       </div>
-      <div class="add-bar"><button class="btn btn-primary" onclick="runCreditAction(submitManualTransaction)">＋ 新增這筆</button></div>
     </div>
 
     <div class="panel">
@@ -2489,14 +2532,6 @@ function pageCashflow(){
       <div class="panel-body pad0" style="border-top:1px solid var(--line);">
         <table><thead><tr><th>日期</th><th>類型</th><th>學員</th><th>金額</th><th>備註</th><th></th></tr></thead>
         <tbody>${rows || `<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:20px;">${cashflowRecords.length===0 ? '尚無收支紀錄' : '這段區間內沒有收支紀錄'}</td></tr>`}</tbody></table>
-      </div>
-    </div>
-
-    <div class="panel">
-      <div class="panel-head"><h3>依學員排序的消費總額${hasFilter ? '（篩選區間）' : ''}</h3></div>
-      <div class="panel-body pad0">
-        <table><thead><tr><th>學員</th><th>消費總額</th></tr></thead>
-        <tbody>${memberRanking || '<tr><td colspan="2" style="text-align:center;color:var(--muted);padding:20px;">尚無資料</td></tr>'}</tbody></table>
       </div>
     </div>`;
 }
