@@ -278,6 +278,7 @@
     <div class="nav-item" data-page="members"><span class="ic">👥</span>學員管理</div>
     <div class="nav-item" data-page="teachers"><span class="ic">🧑‍🏫</span>老師管理</div>
     <div class="nav-item" data-page="teacherlog"><span class="ic">📈</span>老師教學紀錄</div>
+    <div class="nav-item" data-page="healthcheck"><span class="ic">🩺</span>資料健康檢查</div>
     <div class="sidebar-bottom"><span class="logout-link" onclick="logout()">🚪 登出</span></div>
   </div>
 
@@ -1164,6 +1165,16 @@ async function removeAvailableTag(tag){
 
 /* ---- 批次操作共用的選取狀態（學員列表打勾） ---- */
 let selectedMemberIds = new Set();
+
+// 堂數異動（加堂／扣堂／編輯／刪除批次）共用同一把鎖，防止手滑連點或雙擊
+// 造成同一個動作被送出兩次，導致堂數被重複增減（這是之前資料出現重複批次
+// 最可能的成因之一：畫面重繪前的短暫空檔被連點兩次，兩次都讀到同一個舊數字）。
+let isProcessingCreditAction = false;
+async function runCreditAction(fn){
+  if(isProcessingCreditAction){ showToast('請稍候，上一個動作還在處理中'); return; }
+  isProcessingCreditAction = true;
+  try{ await fn(); } finally{ isProcessingCreditAction = false; }
+}
 let memberTagFilter = '';
 
 function toggleMemberSelect(lineUserId, checked){
@@ -1273,12 +1284,12 @@ function pageMembers(){
       <td>${recentCount} 堂</td>
       <td>
         <div class="row-actions" style="flex-wrap:wrap;justify-content:flex-end;">
-          <button class="btn btn-ghost btn-sm" onclick="openMemberDetail('${m.line_user_id}')">查看／管理</button>
-          <button class="btn btn-ghost btn-sm" onclick="adjustMember('${m.line_user_id}', 1)">＋1</button>
-          <button class="btn btn-ghost btn-sm" onclick="adjustMember('${m.line_user_id}', -1)">－1</button>
+          <button class="btn btn-ghost btn-sm" onclick="runCreditAction(()=>openMemberDetail('${m.line_user_id}'))">查看／管理</button>
+          <button class="btn btn-ghost btn-sm" onclick="runCreditAction(()=>adjustMember('${m.line_user_id}', 1))">＋1</button>
+          <button class="btn btn-ghost btn-sm" onclick="runCreditAction(()=>adjustMember('${m.line_user_id}', -1))">－1</button>
           <input type="number" id="setCredits-${m.line_user_id}" placeholder="輸入數字" style="width:70px;border:1px solid var(--line);border-radius:8px;padding:5px 8px;font-size:12.5px;">
           <input type="date" id="setCreditsExpiry-${m.line_user_id}" title="增加堂數時的效期（留空＝永久有效），套用到「＋1」跟「設定」" style="width:128px;border:1px solid var(--line);border-radius:8px;padding:5px 6px;font-size:11.5px;">
-          <button class="btn btn-primary btn-sm" onclick="setMemberCredits('${m.line_user_id}')">設定</button>
+          <button class="btn btn-primary btn-sm" onclick="runCreditAction(()=>setMemberCredits('${m.line_user_id}'))">設定</button>
           <button class="btn btn-danger btn-sm" onclick="deleteMember('${m.line_user_id}')">刪除</button>
         </div>
       </td>
@@ -1328,7 +1339,7 @@ function pageMembers(){
         </div>
         <div class="action-field" id="bcDateField" style="display:none;"><label>到期日</label><input id="bcExpiryDate" type="date"></div>
         <div class="action-field" id="bcDaysField" style="display:none;"><label>幾天後到期</label><input id="bcExpiryDays" type="number" value="30" min="1"></div>
-        <button class="action-btn-full primary" onclick="submitBatchCredits()">＋ 新增這批堂數</button>
+        <button class="action-btn-full primary" onclick="runCreditAction(submitBatchCredits)">＋ 新增這批堂數</button>
       </div>
 
       <div class="action-card">
@@ -1725,7 +1736,7 @@ function pageMemberDetail(){
       <td>${b.class_date} ${b.class_time}</td>
       <td>${b.class_title}（${b.teacher}）</td>
       <td><span class="tag ${statusClass}">${statusLabel}</span></td>
-      <td>${(b.status==='active' && !past) ? `<div class="row-actions"><button class="btn btn-danger btn-sm" onclick="adminCancelBooking('${b.id}')">取消</button></div>` : ''}</td>
+      <td>${(b.status==='active' && !past) ? `<div class="row-actions"><button class="btn btn-danger btn-sm" onclick="runCreditAction(()=>adminCancelBooking('${b.id}'))">取消</button></div>` : ''}</td>
     </tr>`;
   }).join('');
 
@@ -1771,7 +1782,7 @@ function pageMemberDetail(){
           <div class="field" id="mdExpiryDaysField" style="display:none;"><label>幾天後到期</label><input id="mdCreditExpiryDays" type="number" value="30" min="1"></div>
         </div>
       </div>
-      <div class="add-bar"><button class="btn btn-primary" onclick="addCreditsForCurrentMember()">＋ 新增這批堂數</button></div>
+      <div class="add-bar"><button class="btn btn-primary" onclick="runCreditAction(addCreditsForCurrentMember)">＋ 新增這批堂數</button></div>
     </div>
 
     <div class="panel">
@@ -1820,7 +1831,7 @@ function pageMemberDetail(){
                     <input type="checkbox" id="ebSync-${b.id}" checked style="width:14px;height:14px;">同步連動會員總量
                   </label>
                   <button class="btn btn-ghost btn-sm" onclick="cancelEditBatch()">取消</button>
-                  <button class="btn btn-primary btn-sm" onclick="saveEditBatch('${b.id}','${m.line_user_id}')">儲存</button>
+                  <button class="btn btn-primary btn-sm" onclick="runCreditAction(()=>saveEditBatch('${b.id}','${m.line_user_id}'))">儲存</button>
                 </div>
               </td>
             </tr>`;
@@ -1842,7 +1853,7 @@ function pageMemberDetail(){
             <td>${expiryLabel}</td>
             <td><div class="row-actions">
               <button class="btn btn-ghost btn-sm" onclick="startEditBatch('${b.id}')">編輯</button>
-              <button class="btn btn-danger btn-sm" onclick="deleteBatch('${b.id}','${m.line_user_id}')">刪除</button>
+              <button class="btn btn-danger btn-sm" onclick="runCreditAction(()=>deleteBatch('${b.id}','${m.line_user_id}'))">刪除</button>
             </div></td>
           </tr>`;
         }).join('') || '<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:16px;">目前沒有任何堂數批次紀錄</td></tr>'}</tbody></table>
@@ -1974,8 +1985,9 @@ async function adminAddBooking(lineUserId){
 async function adminCancelBooking(bookingId){
   const b = memberBookings.find(x=>x.id===bookingId);
   if(!b) return;
-  const { error } = await db.from('bookings').update({ status:'cancelled' }).eq('id', bookingId);
+  const { data: updated, error } = await db.from('bookings').update({ status:'cancelled' }).eq('id', bookingId).eq('status', 'active').select('id');
   if(error){ showToast('取消失敗'); console.error(error); return; }
+  if(!updated || updated.length===0){ showToast('這筆已經是取消狀態了'); return; } // 防止連點造成重複退還堂數
 
   if(b.credit_batch_id){
     const { data: batch } = await db.from('credit_batches').select('remaining').eq('id', b.credit_batch_id).single();
@@ -2126,7 +2138,78 @@ function pageTeacherLog(){
     </div>` : ''}`;
 }
 
-const PAGES = {overview:pageOverview, store:pageStore, classes:pageClasses, teachers:pageTeachers, members:pageMembers, roster:pageRoster, teacherlog:pageTeacherLog};
+const PAGES = {overview:pageOverview, store:pageStore, classes:pageClasses, teachers:pageTeachers, members:pageMembers, roster:pageRoster, teacherlog:pageTeacherLog, healthcheck:pageHealthCheck};
+
+/* ================= 資料健康檢查 ================= */
+// 檢查每位學員「堂數批次的原始堂數總和」是否等於「實際有效預約數 ＋ 目前剩餘堂數」。
+// 完全依照真實預約紀錄反推，不依賴 remaining／total_credits 欄位本身準不準，
+// 才能在那些欄位已經跑掉的情況下還是抓得出問題（這正是這次資料清理的方法）。
+let healthCheckResults = null;
+async function loadHealthCheckData(){
+  const [bookingsRes, batchesRes] = await Promise.all([
+    db.from('bookings').select('line_user_id,status'),
+    db.from('credit_batches').select('line_user_id,amount')
+  ]);
+  const bookings = bookingsRes.data || [];
+  const batches = batchesRes.data || [];
+
+  const activeByMember = {};
+  bookings.forEach(b=>{ if(b.status==='active') activeByMember[b.line_user_id] = (activeByMember[b.line_user_id]||0) + 1; });
+  const amountByMember = {};
+  batches.forEach(b=>{ amountByMember[b.line_user_id] = (amountByMember[b.line_user_id]||0) + (b.amount||0); });
+
+  healthCheckResults = data.members.map(m=>{
+    const activeBookings = activeByMember[m.line_user_id] || 0;
+    const storedTotal = amountByMember[m.line_user_id] || 0;
+    const trueTotal = activeBookings + m.remaining_credits;
+    return {
+      name: m.display_name || '（未知學員）', uid: m.line_user_id,
+      activeBookings, remaining: m.remaining_credits,
+      trueTotal, storedTotal, ok: storedTotal === trueTotal
+    };
+  }).sort((a,b)=> (a.ok===b.ok) ? 0 : (a.ok ? 1 : -1)); // 有問題的排前面，方便優先處理
+}
+async function loadHealthCheckAndRender(){
+  await loadHealthCheckData();
+  render();
+}
+
+function pageHealthCheck(){
+  if(!healthCheckResults){
+    return `<div class="page-title">資料健康檢查</div><div class="page-sub">正在載入比對資料...</div>`;
+  }
+  const problems = healthCheckResults.filter(r=>!r.ok);
+  const rows = healthCheckResults.map(r=>`
+    <tr>
+      <td>${r.name}</td>
+      <td>${r.activeBookings} 筆</td>
+      <td>${r.remaining} 堂</td>
+      <td>${r.trueTotal} 堂</td>
+      <td>${r.storedTotal} 堂</td>
+      <td>${r.ok ? '<span class="tag on">正常</span>' : `<span class="tag warn">差 ${r.storedTotal - r.trueTotal > 0 ? '+' : ''}${r.storedTotal - r.trueTotal}</span>`}</td>
+      <td><button class="btn btn-ghost btn-sm" onclick="runCreditAction(()=>openMemberDetail('${r.uid}'))">查看／管理</button></td>
+    </tr>`).join('');
+
+  return `
+    <div class="page-title">資料健康檢查</div>
+    <div class="page-sub">檢查每位學員「堂數批次記錄的總量」是否等於「實際有效預約數＋目前剩餘堂數」，用來抓出帳目對不上的學員，不用再靠人工一個一個核對。</div>
+    ${problems.length===0
+      ? `<div class="hint-box" style="background:var(--sage-light);border-color:var(--sage);color:var(--sage-dark);">✅ 目前 ${healthCheckResults.length} 位學員資料全部一致，沒有發現問題。</div>`
+      : `<div class="hint-box">⚠️ 發現 ${problems.length} 位學員的堂數記錄跟實際狀況對不上，建議點「查看／管理」進去，對照「堂數與選課紀錄」裡的狀態明細，用「編輯」批次的方式修正（記得視情況決定要不要勾選「同步連動會員總量」）。</div>`
+    }
+    <div class="panel">
+      <div class="panel-head">
+        <h3>全體學員堂數比對</h3>
+        <button class="btn btn-ghost btn-sm" onclick="runCreditAction(loadHealthCheckAndRender)">🔄 重新檢查</button>
+      </div>
+      <div class="panel-body pad0">
+        <table><thead><tr>
+          <th>學員</th><th>有效預約數</th><th>目前剩餘堂數</th><th>應有總量</th><th>批次記錄總量</th><th>狀態</th><th></th>
+        </tr></thead>
+        <tbody>${rows || '<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:20px;">尚無學員資料</td></tr>'}</tbody></table>
+      </div>
+    </div>`;
+}
 
 function render(){
   document.getElementById('sidebarBrand').innerHTML = data.store.name + '<span>後台管理系統</span>';
@@ -2147,6 +2230,7 @@ async function navigateToPage(page){
   if(page==='members'){ await loadMemberStats(); await loadDayOverrides(); }
   if(page==='roster'){ await loadRoster(); }
   if(page==='teacherlog'){ await loadTeacherLog(teacherLogSelected || (data.teachers[0] && data.teachers[0].name) || ''); }
+  if(page==='healthcheck'){ await loadHealthCheckData(); }
   render();
 }
 
