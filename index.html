@@ -279,6 +279,7 @@
     <div class="nav-item" data-page="members"><span class="ic">👥</span>學員管理</div>
     <div class="nav-item" data-page="teachers"><span class="ic">🧑‍🏫</span>老師管理</div>
     <div class="nav-item" data-page="teacherlog"><span class="ic">📈</span>老師教學紀錄</div>
+    <div class="nav-item" data-page="popularity"><span class="ic">🔥</span>課程熱門度</div>
     <div class="sidebar-bottom"><span class="logout-link" onclick="logout()">🚪 登出</span></div>
   </div>
 
@@ -2245,6 +2246,35 @@ async function onTeacherLogChange(val){
   render();
 }
 
+// 把一批預約紀錄依「實際場次」(class_key) 先彙總出每場的額滿率，
+// 再依「課程」(標題＋老師＋時段，同一堂課的每一次上課都算同一組)
+// 彙總出開課次數、累計參與人次、平均額滿率。用來給「老師教學紀錄」
+// 跟「課程熱門度」共用，只是傳進來的預約紀錄範圍不同（單一老師 vs 全部）。
+// 注意：統計只涵蓋「有過至少一筆預約」的場次，完全沒人訂的場次因為
+// 資料庫裡不會留下任何紀錄，沒辦法算進去。
+function summarizeClassPopularity(bookingsList){
+  const sessions = {};
+  bookingsList.forEach(b=>{
+    if(!sessions[b.class_key]){
+      sessions[b.class_key] = { title:b.class_title, teacher:b.teacher, time:b.class_time, cap:b.cap, active:0 };
+    }
+    if(b.status==='active') sessions[b.class_key].active++;
+  });
+
+  const groups = {};
+  Object.values(sessions).forEach(s=>{
+    const key = `${s.title}__${s.teacher}__${s.time}`;
+    if(!groups[key]) groups[key] = { title:s.title, teacher:s.teacher, time:s.time, sessionsCount:0, totalActive:0, fillRateSum:0 };
+    groups[key].sessionsCount++;
+    groups[key].totalActive += s.active;
+    groups[key].fillRateSum += (s.cap>0) ? (s.active / s.cap) : 0;
+  });
+
+  return Object.values(groups)
+    .map(g=> ({ ...g, avgFillRate: g.sessionsCount>0 ? (g.fillRateSum / g.sessionsCount) : 0 }))
+    .sort((a,b)=> b.avgFillRate - a.avgFillRate);
+}
+
 function pageTeacherLog(){
   const grouped = {};
   teacherLogData.forEach(b=>{
@@ -2260,6 +2290,16 @@ function pageTeacherLog(){
       <td>${s.date} ${s.time}</td>
       <td>${s.title}</td>
       <td><b>${s.active}</b> 人${s.cancelled?`（另有 ${s.cancelled} 人取消）`:''}</td>
+    </tr>`).join('');
+
+  const popularityGroups = summarizeClassPopularity(teacherLogData);
+  const popularityRows = popularityGroups.map(g=>`
+    <tr>
+      <td>${g.title}</td>
+      <td>${g.time}</td>
+      <td>${g.sessionsCount}</td>
+      <td>${g.totalActive}</td>
+      <td><b>${(g.avgFillRate*100).toFixed(0)}%</b></td>
     </tr>`).join('');
 
   return `
@@ -2279,6 +2319,13 @@ function pageTeacherLog(){
     <div class="stat-cards" style="grid-template-columns:repeat(2,1fr);">
       <div class="stat-card"><div class="num">${sessions.length}</div><div class="lbl">總開課次數</div></div>
       <div class="stat-card"><div class="num">${totalStudents}</div><div class="lbl">累計參與學員人次</div></div>
+    </div>
+    <div class="panel">
+      <div class="panel-head"><h3>這位老師的課程熱門度</h3></div>
+      <div class="panel-body pad0">
+        <table><thead><tr><th>課程</th><th>時段</th><th>開課次數</th><th>累計參與人次</th><th>平均額滿率</th></tr></thead>
+        <tbody>${popularityRows || '<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:20px;">這位老師尚無開課紀錄</td></tr>'}</tbody></table>
+      </div>
     </div>
     <div class="panel">
       <div class="panel-head"><h3>開課紀錄</h3></div>
@@ -2536,7 +2583,48 @@ function pageCashflow(){
     </div>`;
 }
 
-const PAGES = {overview:pageOverview, store:pageStore, cashflow:pageCashflow, classes:pageClasses, teachers:pageTeachers, members:pageMembers, roster:pageRoster, teacherlog:pageTeacherLog};
+/* ================= 課程熱門度（全部老師） ================= */
+let popularityData = null;
+async function loadPopularityData(){
+  const { data, error } = await db.from('bookings').select('class_key,class_title,teacher,class_time,cap,status');
+  popularityData = (!error && data) ? data : [];
+}
+async function loadPopularityAndRender(){
+  await loadPopularityData();
+  render();
+}
+
+function pagePopularity(){
+  if(!popularityData){
+    return `<div class="page-title">課程熱門度</div><div class="page-sub">正在載入資料...</div>`;
+  }
+  const groups = summarizeClassPopularity(popularityData);
+  const rows = groups.map(g=>`
+    <tr>
+      <td>${g.title}</td>
+      <td>${g.teacher}</td>
+      <td>${g.time}</td>
+      <td>${g.sessionsCount}</td>
+      <td>${g.totalActive}</td>
+      <td><b>${(g.avgFillRate*100).toFixed(0)}%</b></td>
+    </tr>`).join('');
+
+  return `
+    <div class="page-title">課程熱門度</div>
+    <div class="page-sub">全部老師的課排在一起比，依「平均額滿率」由高到低排序，看哪堂最搶手、哪堂比較冷門。統計只涵蓋有過預約紀錄的場次，完全沒人訂過的場次沒辦法算進來。</div>
+    <div class="panel">
+      <div class="panel-head">
+        <h3>全部課程排行</h3>
+        <button class="btn btn-ghost btn-sm" onclick="runCreditAction(loadPopularityAndRender)">🔄 重新整理</button>
+      </div>
+      <div class="panel-body pad0">
+        <table><thead><tr><th>課程</th><th>老師</th><th>時段</th><th>開課次數</th><th>累計參與人次</th><th>平均額滿率</th></tr></thead>
+        <tbody>${rows || '<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:20px;">尚無預約紀錄</td></tr>'}</tbody></table>
+      </div>
+    </div>`;
+}
+
+const PAGES = {overview:pageOverview, store:pageStore, cashflow:pageCashflow, classes:pageClasses, teachers:pageTeachers, members:pageMembers, roster:pageRoster, teacherlog:pageTeacherLog, popularity:pagePopularity};
 
 function render(){
   document.getElementById('sidebarBrand').innerHTML = data.store.name + '<span>後台管理系統</span>';
@@ -2558,6 +2646,7 @@ async function navigateToPage(page){
   if(page==='roster'){ await loadRoster(); }
   if(page==='teacherlog'){ await loadTeacherLog(teacherLogSelected || (data.teachers[0] && data.teachers[0].name) || ''); }
   if(page==='cashflow'){ await loadCashflowData(); }
+  if(page==='popularity'){ await loadPopularityData(); }
   render();
 }
 
