@@ -1906,7 +1906,7 @@ function pageMemberDetail(){
       ${m.registration_submitted_at ? `
       <div class="panel-body" style="display:flex;gap:24px;flex-wrap:wrap;font-size:13px;color:var(--muted);">
         <div>填寫姓名：<b style="color:var(--ink);">${m.registration_name||'—'}</b></div>
-        <div>聯絡方式：<b style="color:var(--ink);">${m.registration_contact||'—'}</b></div>
+        <div>e-mail：<b style="color:var(--ink);">${m.registration_contact||'—'}</b></div>
         <div>填寫時間：<b style="color:var(--ink);">${new Date(m.registration_submitted_at).toLocaleString('zh-TW')}</b></div>
       </div>
       <div class="panel-body pad0" style="border-top:1px solid var(--line);">
@@ -2737,7 +2737,7 @@ async function saveRegistrationDraft(){
 }
 async function publishRegistrationForm(){
   if(registrationQuestions.filter(q=>q.active).length===0){
-    if(!confirm('目前沒有任何啟用中的問題（只會收姓名跟聯絡方式），確定要這樣送出啟用嗎？')) return;
+    if(!confirm('目前沒有任何啟用中的問題（只會收姓名跟 e-mail），確定要這樣送出啟用嗎？')) return;
   }
   if(!confirm('確定要啟用這份表單嗎？啟用後，前台的新學員打開 app 就會直接看到這份表單。')) return;
   const { error } = await db.from('store_settings').update({ registration_form_status: 'published' }).eq('id', 1);
@@ -2922,13 +2922,13 @@ function pageRegistration(){
     <div class="panel">
       <div class="panel-head"><h3>固定欄位</h3></div>
       <div class="panel-body">
-        <div class="desc" style="margin-bottom:12px;">「姓名」「聯絡方式」原本是表單一定會有的固定欄位。如果你已經自己設計了對應的問題（例如下面的自訂問題也叫「姓名」），可以把這裡關掉，避免重複。</div>
+        <div class="desc" style="margin-bottom:12px;">「姓名」「e-mail」原本是表單一定會有的固定欄位。如果你已經自己設計了對應的問題（例如下面的自訂問題也叫「姓名」），可以把這裡關掉，避免重複。</div>
         <div class="settings-row">
           <div><div class="label">顯示「姓名」固定欄位</div></div>
           <div class="toggle ${data.store.registration_show_name!==false?'on':''}" onclick="toggleRegistrationShowName()"><div class="knob"></div></div>
         </div>
         <div class="settings-row">
-          <div><div class="label">顯示「聯絡方式」固定欄位</div></div>
+          <div><div class="label">顯示「e-mail」固定欄位</div></div>
           <div class="toggle ${data.store.registration_show_contact!==false?'on':''}" onclick="toggleRegistrationShowContact()"><div class="knob"></div></div>
         </div>
       </div>
