@@ -277,6 +277,7 @@
     <div class="nav-item" data-page="cashflow"><span class="ic">💰</span>金流管理</div>
     <div class="nav-item" data-page="classes"><span class="ic">🗓️</span>課程設定</div>
     <div class="nav-item" data-page="roster"><span class="ic">📋</span>每日名單</div>
+    <div class="nav-item" data-page="registration"><span class="ic">📝</span>報名表單設定</div>
     <div class="nav-item" data-page="members"><span class="ic">👥</span>學員管理</div>
     <div class="nav-item" data-page="teachers"><span class="ic">🧑‍🏫</span>老師管理</div>
     <div class="nav-item" data-page="teacherlog"><span class="ic">📈</span>老師教學紀錄</div>
@@ -327,6 +328,11 @@ let data = {
     booking_open_start:null, booking_open_end:null
   }
 };
+let registrationQuestions = []; // 會員註冊表單的問題設定
+let editingRegQuestionId = null;
+let newRegQOptions = []; // 新增問題時暫存的單選選項
+let selectedRegistrantId = null; // 報名表單設定頁：目前查看的學員（跟學員管理共用學員資料）
+
 let selectedMemberId = null; // 學員管理：目前展開檢視的學員
 let memberBookings = [];     // 該學員的預約紀錄
 let memberBatches = [];      // 該學員的堂數批次（各自效期）
@@ -396,18 +402,20 @@ async function loadMemberStats(){
 }
 
 async function loadAdminState(){
-  const [storeRes, classesRes, teachersRes, notifyRes, membersRes] = await Promise.all([
+  const [storeRes, classesRes, teachersRes, notifyRes, membersRes, regQRes] = await Promise.all([
     db.from('store_settings').select('*').eq('id',1).single(),
     db.from('class_templates').select('*').order('time'),
     db.from('teachers').select('*').order('created_at'),
     db.from('notify_settings').select('*').eq('id',1).single(),
-    db.from('members').select('*').order('updated_at', {ascending:false})
+    db.from('members').select('*').order('updated_at', {ascending:false}),
+    db.from('registration_questions').select('*').order('sort_order')
   ]);
   if(storeRes.data) data.store = storeRes.data;
   if(classesRes.data) data.classes = classesRes.data;
   if(teachersRes.data) data.teachers = teachersRes.data;
   if(notifyRes.data) data.notify = notifyRes.data;
   if(membersRes.data) data.members = membersRes.data;
+  if(regQRes.data) registrationQuestions = regQRes.data;
   await loadDayOverrides(); // 一併載入單日停課/加開特別課，讓學員管理等頁面也能用到
 }
 
@@ -1419,6 +1427,20 @@ async function deleteMember(lineUserId){
   showToast('已刪除學員');
 }
 
+async function clearMemberRegistration(lineUserId){
+  const m = data.members.find(x=>x.line_user_id===lineUserId);
+  if(!m) return;
+  const ok = confirm('確定要清除這位學員的會員註冊資料嗎？\n清除後他的堂數、預約紀錄都會保留，但下次打開前台會被系統當成「新學員」，重新跳出會員註冊表單。');
+  if(!ok) return;
+  const { error } = await db.from('members').update({
+    registration_name: null, registration_contact: null, registration_answers: {}, registration_submitted_at: null
+  }).eq('line_user_id', lineUserId);
+  if(error){ showToast('清除失敗'); console.error(error); return; }
+  m.registration_name = null; m.registration_contact = null; m.registration_answers = {}; m.registration_submitted_at = null;
+  render();
+  showToast('已清除會員註冊資料');
+}
+
 function onMemberSearch(val){ memberSearchQuery = val; render(); }
 
 async function applyStatsMonths(){
@@ -1864,6 +1886,27 @@ function pageMemberDetail(){
       ${m.display_name || '（未知學員）'}
     </div>
     <div class="page-sub">目前剩餘堂數：<b>${m.remaining_credits}</b> 堂</div>
+
+    <div class="panel">
+      <div class="panel-head">
+        <h3>會員註冊資料</h3>
+        ${m.registration_submitted_at ? `<button class="btn btn-danger btn-sm" onclick="clearMemberRegistration('${m.line_user_id}')">清除註冊資料</button>` : ''}
+      </div>
+      ${m.registration_submitted_at ? `
+      <div class="panel-body" style="display:flex;gap:24px;flex-wrap:wrap;font-size:13px;color:var(--muted);">
+        <div>填寫姓名：<b style="color:var(--ink);">${m.registration_name||'—'}</b></div>
+        <div>聯絡方式：<b style="color:var(--ink);">${m.registration_contact||'—'}</b></div>
+        <div>填寫時間：<b style="color:var(--ink);">${new Date(m.registration_submitted_at).toLocaleString('zh-TW')}</b></div>
+      </div>
+      <div class="panel-body pad0" style="border-top:1px solid var(--line);">
+        <table><tbody>${registrationQuestions.map(q=>`
+          <tr>
+            <td style="padding:11px 18px;border-bottom:1px solid var(--line);width:40%;">${q.question}</td>
+            <td style="padding:11px 18px;border-bottom:1px solid var(--line);">${(m.registration_answers && m.registration_answers[q.id]) || '<span style="color:var(--muted);">（未回答）</span>'}</td>
+          </tr>`).join('') || '<tr><td style="padding:16px 18px;color:var(--muted);text-align:center;">表單目前沒有額外問題</td></tr>'}</tbody></table>
+      </div>` : `
+      <div class="panel-body" style="text-align:center;color:var(--muted);padding:20px;">這位學員還沒填過會員註冊資料</div>`}
+    </div>
 
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:stretch;">
       <div class="panel" style="display:flex;flex-direction:column;">
@@ -2670,7 +2713,203 @@ function pagePopularity(){
     </div>`;
 }
 
-const PAGES = {overview:pageOverview, store:pageStore, cashflow:pageCashflow, classes:pageClasses, teachers:pageTeachers, members:pageMembers, roster:pageRoster, teacherlog:pageTeacherLog, popularity:pagePopularity};
+/* ================= 報名表單設定（會員註冊） ================= */
+// 表單啟用狀態存在 store_settings.registration_form_status（跟店家設定同一列）。
+// 'draft' = 前台不會出現任何表單／入口，可以放心慢慢設計問題；
+// 'published' = 新學員打開前台會直接看到表單，已註冊學員會看到「會員資料設定」入口。
+async function saveRegistrationDraft(){
+  const { error } = await db.from('store_settings').update({ registration_form_status: 'draft' }).eq('id', 1);
+  if(error){ showToast('儲存失敗'); console.error(error); return; }
+  data.store.registration_form_status = 'draft';
+  render();
+  showToast('已儲存草稿，表單還沒啟用，前台不會出現');
+}
+async function publishRegistrationForm(){
+  if(registrationQuestions.filter(q=>q.active).length===0){
+    if(!confirm('目前沒有任何啟用中的問題（只會收姓名跟聯絡方式），確定要這樣送出啟用嗎？')) return;
+  }
+  if(!confirm('確定要啟用這份表單嗎？啟用後，前台的新學員打開 app 就會直接看到這份表單。')) return;
+  const { error } = await db.from('store_settings').update({ registration_form_status: 'published' }).eq('id', 1);
+  if(error){ showToast('啟用失敗'); console.error(error); return; }
+  data.store.registration_form_status = 'published';
+  render();
+  showToast('已啟用，前台生效中');
+}
+async function unpublishRegistrationForm(){
+  if(!confirm('確定要停用這份表單嗎？停用後前台不會再跳出表單，改回草稿狀態。')) return;
+  const { error } = await db.from('store_settings').update({ registration_form_status: 'draft' }).eq('id', 1);
+  if(error){ showToast('停用失敗'); console.error(error); return; }
+  data.store.registration_form_status = 'draft';
+  render();
+  showToast('已停用，改回草稿狀態');
+}
+
+function onNewRegQTypeChange(){
+  document.getElementById('newRegQOptionsField').style.display =
+    document.getElementById('newRegQType').value==='choice' ? 'block' : 'none';
+}
+function addNewRegQOption(){
+  const input = document.getElementById('newRegQOptionInput');
+  const val = input.value.trim();
+  if(!val) return;
+  newRegQOptions.push(val);
+  input.value = '';
+  renderNewRegQOptions();
+}
+function removeNewRegQOption(i){
+  newRegQOptions.splice(i,1);
+  renderNewRegQOptions();
+}
+function renderNewRegQOptions(){
+  const el = document.getElementById('newRegQOptionsList');
+  if(!el) return;
+  el.innerHTML = newRegQOptions.map((o,i)=>
+    `<span class="tag-chip">${o}<span class="x" onclick="removeNewRegQOption(${i})">✕</span></span>`
+  ).join('') || '<span style="color:var(--muted);font-size:12px;">尚未新增選項</span>';
+}
+async function submitNewRegQuestion(){
+  const text = document.getElementById('newRegQText').value.trim();
+  const type = document.getElementById('newRegQType').value;
+  if(!text){ showToast('請輸入問題文字'); return; }
+  if(type==='choice' && newRegQOptions.length<2){ showToast('單選題至少要有 2 個選項'); return; }
+  const sortOrder = registrationQuestions.length>0 ? Math.max(...registrationQuestions.map(q=>q.sort_order)) + 1 : 0;
+  const { error } = await db.from('registration_questions').insert({
+    question: text, type, options: type==='choice' ? [...newRegQOptions] : [], sort_order: sortOrder, active: true
+  });
+  if(error){ showToast('新增失敗'); console.error(error); return; }
+  document.getElementById('newRegQText').value = '';
+  newRegQOptions = [];
+  await loadAdminState();
+  render();
+  showToast('已新增問題');
+}
+async function toggleRegQuestionActive(id){
+  const q = registrationQuestions.find(x=>x.id===id);
+  if(!q) return;
+  const { error } = await db.from('registration_questions').update({ active: !q.active }).eq('id', id);
+  if(error){ showToast('更新失敗'); console.error(error); return; }
+  q.active = !q.active;
+  render();
+}
+async function deleteRegQuestion(id){
+  if(!confirm('確定要刪除這個問題嗎？已經收到的答案不會被刪除，只是表單上不會再顯示這一題。')) return;
+  const { error } = await db.from('registration_questions').delete().eq('id', id);
+  if(error){ showToast('刪除失敗'); console.error(error); return; }
+  registrationQuestions = registrationQuestions.filter(x=>x.id!==id);
+  render();
+  showToast('已刪除');
+}
+async function moveRegQuestion(id, delta){
+  const idx = registrationQuestions.findIndex(x=>x.id===id);
+  const newIdx = idx + delta;
+  if(newIdx<0 || newIdx>=registrationQuestions.length) return;
+  const a = registrationQuestions[idx], b = registrationQuestions[newIdx];
+  [registrationQuestions[idx], registrationQuestions[newIdx]] = [b, a];
+  await Promise.all([
+    db.from('registration_questions').update({ sort_order: b.sort_order }).eq('id', a.id),
+    db.from('registration_questions').update({ sort_order: a.sort_order }).eq('id', b.id)
+  ]);
+  const tmp = a.sort_order; a.sort_order = b.sort_order; b.sort_order = tmp;
+  render();
+}
+function startEditRegQuestion(id){ editingRegQuestionId = id; render(); }
+function cancelEditRegQuestion(){ editingRegQuestionId = null; render(); }
+async function saveEditRegQuestion(id){
+  const text = document.getElementById(`rqEditText-${id}`).value.trim();
+  if(!text){ showToast('問題文字不能空白'); return; }
+  const { error } = await db.from('registration_questions').update({ question: text }).eq('id', id);
+  if(error){ showToast('更新失敗'); console.error(error); return; }
+  const q = registrationQuestions.find(x=>x.id===id);
+  if(q) q.question = text;
+  editingRegQuestionId = null;
+  render();
+  showToast('已更新問題');
+}
+
+function pageRegistration(){
+  const isPublished = data.store.registration_form_status==='published';
+  const rows = registrationQuestions.map((q,i)=>{
+    const isEditing = editingRegQuestionId===q.id;
+    if(isEditing){
+      return `
+      <div class="q-row" style="align-items:end;">
+        <div class="field" style="flex:1;"><label>問題文字</label><input id="rqEditText-${q.id}" value="${q.question}"></div>
+        <button class="btn btn-ghost btn-sm" onclick="cancelEditRegQuestion()">取消</button>
+        <button class="btn btn-primary btn-sm" onclick="saveEditRegQuestion('${q.id}')">儲存</button>
+      </div>`;
+    }
+    return `
+      <div class="q-row">
+        <div class="q-order">
+          <button onclick="moveRegQuestion('${q.id}',-1)" ${i===0?'disabled':''}>▲</button>
+          <button onclick="moveRegQuestion('${q.id}',1)" ${i===registrationQuestions.length-1?'disabled':''}>▼</button>
+        </div>
+        <div class="q-main">
+          <div class="q-text">${q.question}</div>
+          <div class="q-meta">
+            <span class="tag ${q.type==='choice'?'on':'off'}">${q.type==='choice' ? '單選：'+(q.options||[]).join('、') : '簡答'}</span>
+            <span class="tag ${q.active?'on':'off'}" style="margin-left:6px;">${q.active?'顯示中':'已隱藏'}</span>
+          </div>
+        </div>
+        <div class="q-actions">
+          <div class="toggle ${q.active?'on':''}" onclick="toggleRegQuestionActive('${q.id}')" title="顯示／隱藏"><div class="knob"></div></div>
+          <button class="btn btn-ghost btn-sm" onclick="startEditRegQuestion('${q.id}')">編輯</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteRegQuestion('${q.id}')">刪除</button>
+        </div>
+      </div>`;
+  }).join('');
+
+  return `
+    <div class="page-title">報名表單設定</div>
+    <div class="page-sub">設定「會員註冊」表單要收集的問題。啟用後，新學員第一次打開前台會直接看到這份表單；已註冊學員可以隨時從「會員資料設定」查看或修改自己填過的答案。每位學員填過的答案，會顯示在「學員管理 → 查看／管理」裡。</div>
+
+    <div class="panel" style="border-color:${isPublished?'var(--sage)':'var(--clay)'};">
+      <div class="panel-body" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <span class="tag ${isPublished?'on':'off'}" style="font-size:12.5px;padding:5px 12px;">${isPublished ? '✅ 已啟用' : '📝 草稿（尚未啟用）'}</span>
+          <span style="font-size:12.5px;color:var(--muted);">${isPublished ? '前台的新學員打開 app 時，會直接看到這份表單。' : '前台不會出現這份表單，你可以放心慢慢設計問題。'}</span>
+        </div>
+        <div style="display:flex;gap:8px;">
+          <button class="btn btn-ghost btn-sm" onclick="saveRegistrationDraft()">💾 儲存草稿</button>
+          ${isPublished
+            ? `<button class="btn btn-danger btn-sm" onclick="unpublishRegistrationForm()">停用</button>`
+            : `<button class="btn btn-primary btn-sm" onclick="publishRegistrationForm()">✅ 確認送出並啟用</button>`
+          }
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h3>新增問題</h3></div>
+      <div class="panel-body">
+        <div class="form-grid">
+          <div class="field" style="grid-column:1/-1;"><label>問題文字</label><input id="newRegQText" placeholder="例如：有沒有瑜珈經驗？"></div>
+          <div class="field"><label>題型</label>
+            <select id="newRegQType" onchange="onNewRegQTypeChange()">
+              <option value="text">簡答（自由輸入文字）</option>
+              <option value="choice">單選（自己設定選項）</option>
+            </select>
+          </div>
+          <div class="field" id="newRegQOptionsField" style="display:none;grid-column:1/-1;">
+            <label>選項</label>
+            <div class="tag-add-row">
+              <input id="newRegQOptionInput" placeholder="輸入一個選項後按新增">
+              <button class="tag-add-btn" onclick="addNewRegQOption()" type="button">＋</button>
+            </div>
+            <div id="newRegQOptionsList" class="tag-chip-wrap"></div>
+          </div>
+        </div>
+      </div>
+      <div class="add-bar"><button class="btn btn-primary" onclick="submitNewRegQuestion()">＋ 新增這個問題</button></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h3>目前的問題（照這個順序顯示在表單上）</h3></div>
+      <div class="panel-body pad0">${rows || '<div class="empty-state" style="padding:24px;color:var(--muted);text-align:center;">目前沒有任何問題，上面新增一個看看吧</div>'}</div>
+    </div>`;
+}
+
+const PAGES = {overview:pageOverview, store:pageStore, cashflow:pageCashflow, classes:pageClasses, teachers:pageTeachers, members:pageMembers, roster:pageRoster, teacherlog:pageTeacherLog, popularity:pagePopularity, registration:pageRegistration};
 
 function render(){
   document.getElementById('sidebarBrand').innerHTML = data.store.name + '<span>後台管理系統</span>';
