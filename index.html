@@ -2864,6 +2864,27 @@ async function toggleRegistrationShowContact(){
 
 function pageRegistration(){
   const isPublished = data.store.registration_form_status==='published';
+
+  // 固定欄位（姓名／e-mail）跟自訂問題放在同一個列表最前面，只能切換顯示／隱藏，
+  // 不能排序、編輯或刪除——它們不是 registration_questions 裡的資料。
+  const fixedFields = [
+    { key:'name', label:'姓名', shown: data.store.registration_show_name!==false, toggleFn:'toggleRegistrationShowName' },
+    { key:'contact', label:'e-mail', shown: data.store.registration_show_contact!==false, toggleFn:'toggleRegistrationShowContact' }
+  ];
+  const fixedFieldRows = fixedFields.map(f=>`
+    <div class="q-row">
+      <div class="q-order" style="visibility:hidden;"><button>▲</button><button>▼</button></div>
+      <div class="q-main">
+        <div class="q-text">${f.label}</div>
+        <div class="q-meta"><span class="tag off">固定欄位</span></div>
+      </div>
+      <div class="q-actions">
+        <label style="display:flex;align-items:center;gap:5px;font-size:11.5px;color:var(--muted);cursor:pointer;white-space:nowrap;" title="顯示／隱藏">
+          <div class="toggle ${f.shown?'on':''}" onclick="${f.toggleFn}()"><div class="knob"></div></div>顯示
+        </label>
+      </div>
+    </div>`).join('');
+
   const rows = registrationQuestions.map((q,i)=>{
     const isEditing = editingRegQuestionId===q.id;
     if(isEditing){
@@ -2922,21 +2943,6 @@ function pageRegistration(){
     </div>
 
     <div class="panel">
-      <div class="panel-head"><h3>固定欄位</h3></div>
-      <div class="panel-body">
-        <div class="desc" style="margin-bottom:12px;">「姓名」「e-mail」原本是表單一定會有的固定欄位。如果你已經自己設計了對應的問題（例如下面的自訂問題也叫「姓名」），可以把這裡關掉，避免重複。</div>
-        <div class="settings-row">
-          <div><div class="label">顯示「姓名」固定欄位</div></div>
-          <div class="toggle ${data.store.registration_show_name!==false?'on':''}" onclick="toggleRegistrationShowName()"><div class="knob"></div></div>
-        </div>
-        <div class="settings-row">
-          <div><div class="label">顯示「e-mail」固定欄位</div></div>
-          <div class="toggle ${data.store.registration_show_contact!==false?'on':''}" onclick="toggleRegistrationShowContact()"><div class="knob"></div></div>
-        </div>
-      </div>
-    </div>
-
-    <div class="panel">
       <div class="panel-head"><h3>新增問題</h3></div>
       <div class="panel-body">
         <div class="form-grid">
@@ -2966,7 +2972,7 @@ function pageRegistration(){
 
     <div class="panel">
       <div class="panel-head"><h3>目前的問題（照這個順序顯示在表單上）</h3></div>
-      <div class="panel-body pad0">${rows || '<div class="empty-state" style="padding:24px;color:var(--muted);text-align:center;">目前沒有任何問題，上面新增一個看看吧</div>'}</div>
+      <div class="panel-body pad0">${fixedFieldRows}${rows || '<div class="empty-state" style="padding:24px;color:var(--muted);text-align:center;">目前沒有其他自訂問題，上面新增一個看看吧</div>'}</div>
     </div>`;
 }
 
