@@ -2892,7 +2892,9 @@ function pageRegistration(){
           <label style="display:flex;align-items:center;gap:5px;font-size:11.5px;color:var(--muted);cursor:pointer;white-space:nowrap;" title="必填">
             <div class="toggle ${q.required?'on':''}" onclick="toggleRegQuestionRequired('${q.id}')"><div class="knob"></div></div>必填
           </label>
-          <div class="toggle ${q.active?'on':''}" onclick="toggleRegQuestionActive('${q.id}')" title="顯示／隱藏"><div class="knob"></div></div>
+          <label style="display:flex;align-items:center;gap:5px;font-size:11.5px;color:var(--muted);cursor:pointer;white-space:nowrap;" title="顯示／隱藏">
+            <div class="toggle ${q.active?'on':''}" onclick="toggleRegQuestionActive('${q.id}')"><div class="knob"></div></div>顯示
+          </label>
           <button class="btn btn-ghost btn-sm" onclick="startEditRegQuestion('${q.id}')">編輯</button>
           <button class="btn btn-danger btn-sm" onclick="deleteRegQuestion('${q.id}')">刪除</button>
         </div>
