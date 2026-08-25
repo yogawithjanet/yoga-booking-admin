@@ -2781,14 +2781,16 @@ function renderNewRegQOptions(){
 async function submitNewRegQuestion(){
   const text = document.getElementById('newRegQText').value.trim();
   const type = document.getElementById('newRegQType').value;
+  const required = document.getElementById('newRegQRequired').checked;
   if(!text){ showToast('請輸入問題文字'); return; }
   if(type==='choice' && newRegQOptions.length<2){ showToast('單選題至少要有 2 個選項'); return; }
   const sortOrder = registrationQuestions.length>0 ? Math.max(...registrationQuestions.map(q=>q.sort_order)) + 1 : 0;
   const { error } = await db.from('registration_questions').insert({
-    question: text, type, options: type==='choice' ? [...newRegQOptions] : [], sort_order: sortOrder, active: true
+    question: text, type, options: type==='choice' ? [...newRegQOptions] : [], sort_order: sortOrder, active: true, required
   });
   if(error){ showToast('新增失敗'); console.error(error); return; }
   document.getElementById('newRegQText').value = '';
+  document.getElementById('newRegQRequired').checked = false;
   newRegQOptions = [];
   await loadAdminState();
   render();
@@ -2800,6 +2802,14 @@ async function toggleRegQuestionActive(id){
   const { error } = await db.from('registration_questions').update({ active: !q.active }).eq('id', id);
   if(error){ showToast('更新失敗'); console.error(error); return; }
   q.active = !q.active;
+  render();
+}
+async function toggleRegQuestionRequired(id){
+  const q = registrationQuestions.find(x=>x.id===id);
+  if(!q) return;
+  const { error } = await db.from('registration_questions').update({ required: !q.required }).eq('id', id);
+  if(error){ showToast('更新失敗'); console.error(error); return; }
+  q.required = !q.required;
   render();
 }
 async function deleteRegQuestion(id){
@@ -2837,6 +2847,21 @@ async function saveEditRegQuestion(id){
   showToast('已更新問題');
 }
 
+async function toggleRegistrationShowName(){
+  const newVal = !(data.store.registration_show_name!==false);
+  const { error } = await db.from('store_settings').update({ registration_show_name: newVal }).eq('id', 1);
+  if(error){ showToast('更新失敗'); console.error(error); return; }
+  data.store.registration_show_name = newVal;
+  render();
+}
+async function toggleRegistrationShowContact(){
+  const newVal = !(data.store.registration_show_contact!==false);
+  const { error } = await db.from('store_settings').update({ registration_show_contact: newVal }).eq('id', 1);
+  if(error){ showToast('更新失敗'); console.error(error); return; }
+  data.store.registration_show_contact = newVal;
+  render();
+}
+
 function pageRegistration(){
   const isPublished = data.store.registration_form_status==='published';
   const rows = registrationQuestions.map((q,i)=>{
@@ -2860,9 +2885,13 @@ function pageRegistration(){
           <div class="q-meta">
             <span class="tag ${q.type==='choice'?'on':'off'}">${q.type==='choice' ? '單選：'+(q.options||[]).join('、') : '簡答'}</span>
             <span class="tag ${q.active?'on':'off'}" style="margin-left:6px;">${q.active?'顯示中':'已隱藏'}</span>
+            <span class="tag ${q.required?'warn':'off'}" style="margin-left:6px;">${q.required?'必填':'選填'}</span>
           </div>
         </div>
         <div class="q-actions">
+          <label style="display:flex;align-items:center;gap:5px;font-size:11.5px;color:var(--muted);cursor:pointer;white-space:nowrap;" title="必填">
+            <div class="toggle ${q.required?'on':''}" onclick="toggleRegQuestionRequired('${q.id}')"><div class="knob"></div></div>必填
+          </label>
           <div class="toggle ${q.active?'on':''}" onclick="toggleRegQuestionActive('${q.id}')" title="顯示／隱藏"><div class="knob"></div></div>
           <button class="btn btn-ghost btn-sm" onclick="startEditRegQuestion('${q.id}')">編輯</button>
           <button class="btn btn-danger btn-sm" onclick="deleteRegQuestion('${q.id}')">刪除</button>
@@ -2891,6 +2920,21 @@ function pageRegistration(){
     </div>
 
     <div class="panel">
+      <div class="panel-head"><h3>固定欄位</h3></div>
+      <div class="panel-body">
+        <div class="desc" style="margin-bottom:12px;">「姓名」「聯絡方式」原本是表單一定會有的固定欄位。如果你已經自己設計了對應的問題（例如下面的自訂問題也叫「姓名」），可以把這裡關掉，避免重複。</div>
+        <div class="settings-row">
+          <div><div class="label">顯示「姓名」固定欄位</div></div>
+          <div class="toggle ${data.store.registration_show_name!==false?'on':''}" onclick="toggleRegistrationShowName()"><div class="knob"></div></div>
+        </div>
+        <div class="settings-row">
+          <div><div class="label">顯示「聯絡方式」固定欄位</div></div>
+          <div class="toggle ${data.store.registration_show_contact!==false?'on':''}" onclick="toggleRegistrationShowContact()"><div class="knob"></div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
       <div class="panel-head"><h3>新增問題</h3></div>
       <div class="panel-body">
         <div class="form-grid">
@@ -2908,6 +2952,10 @@ function pageRegistration(){
               <button class="tag-add-btn" onclick="addNewRegQOption()" type="button">＋</button>
             </div>
             <div id="newRegQOptionsList" class="tag-chip-wrap"></div>
+          </div>
+          <div class="field" style="grid-column:1/-1;flex-direction:row;align-items:center;gap:8px;">
+            <input type="checkbox" id="newRegQRequired" style="width:16px;height:16px;">
+            <label for="newRegQRequired" style="margin:0;">這一題設為必填</label>
           </div>
         </div>
       </div>
