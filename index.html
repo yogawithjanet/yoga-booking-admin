@@ -147,6 +147,17 @@
   }
   .toggle.on .knob{left:18px;}
 
+  /* ---- 報名表單設定：問題列表 ---- */
+  .q-row{display:flex;align-items:flex-start;gap:12px;padding:14px 18px;border-bottom:1px solid var(--line);}
+  .q-row:last-child{border-bottom:none;}
+  .q-order{display:flex;flex-direction:column;gap:2px;}
+  .q-order button{border:none;background:var(--sage-light);color:var(--sage-dark);width:22px;height:18px;border-radius:5px;cursor:pointer;font-size:10px;line-height:1;}
+  .q-order button:disabled{opacity:.3;cursor:not-allowed;}
+  .q-main{flex:1;min-width:0;}
+  .q-text{font-size:13.5px;font-weight:700;}
+  .q-meta{font-size:11.5px;color:var(--muted);margin-top:3px;}
+  .q-actions{display:flex;align-items:center;gap:6px;flex-shrink:0;}
+
   .settings-row{display:flex;justify-content:space-between;align-items:center;padding:13px 0;border-bottom:1px solid var(--line);gap:16px;}
   .settings-row:last-child{border-bottom:none;}
   .settings-row .label{font-size:13.5px;font-weight:600;}
