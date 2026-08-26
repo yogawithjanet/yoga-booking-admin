@@ -251,6 +251,7 @@
   .logout-link:hover{color:#fff;}
 
   .two-col-row{display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:stretch;}
+  .roster-layout{display:grid;grid-template-columns:380px 1fr;gap:20px;align-items:start;}
 
   /* ---- 手機版選單開關（桌面版預設隱藏） ---- */
   .mobile-topbar{display:none;}
@@ -284,6 +285,7 @@
 
     .form-grid{grid-template-columns:1fr;}
     .two-col-row{grid-template-columns:1fr;gap:14px;}
+    .roster-layout{grid-template-columns:1fr;gap:14px;}
     .action-row{grid-template-columns:1fr;}
     .stat-cards{grid-template-columns:repeat(2,1fr);}
 
@@ -794,7 +796,7 @@ async function quickEditOccurrence(iso, templateId){
   classFormMode = 'single';
   editingClassId = null;
   editingOverrideId = null; // 這是新增一堂特別課，不是編輯既有的
-  singleDayFormPrefill = { title:tmpl.title, teacher:tmpl.teacher, time:tmpl.time, cap:tmpl.cap, description:tmpl.description||'' };
+  singleDayFormPrefill = { title:tmpl.title, teacher:tmpl.teacher, time:tmpl.time, cap:tmpl.cap, location:tmpl.location||'', description:tmpl.description||'' };
   render();
   setTimeout(()=>{
     const el = document.getElementById('classFormPanel');
@@ -808,7 +810,7 @@ function startEditExtraOverride(id){
   if(!o) return;
   editingOverrideId = id;
   dayOverrideDate = o.date;
-  singleDayFormPrefill = { title:o.title, teacher:o.teacher, time:o.time, cap:o.cap, description:o.description||'' };
+  singleDayFormPrefill = { title:o.title, teacher:o.teacher, time:o.time, cap:o.cap, location:o.location||'', description:o.description||'' };
   showAddClassForm = true;
   classFormMode = 'single';
   editingClassId = null;
@@ -829,10 +831,11 @@ async function saveExtraOverrideEdit(){
   const teacher = document.getElementById('ovExtraTeacher').value;
   const time = document.getElementById('ovExtraTime').value;
   const cap = Number(document.getElementById('ovExtraCap').value)||12;
+  const location = document.getElementById('ovExtraLocation').value.trim();
   const description = document.getElementById('ovExtraDescription').value.trim();
   if(!title){ showToast('請輸入課程名稱'); return; }
   if(!teacher){ showToast('請先在「老師管理」新增至少一位老師'); return; }
-  const { error } = await db.from('class_overrides').update({ title, teacher, time, cap, description }).eq('id', editingOverrideId);
+  const { error } = await db.from('class_overrides').update({ title, teacher, time, cap, location, description }).eq('id', editingOverrideId);
   if(error){ showToast('儲存失敗'); console.error(error); return; }
   editingOverrideId = null;
   singleDayFormPrefill = null;
@@ -848,6 +851,7 @@ function pageClasses(){
     <tr>
       <td><b>${c.title}</b></td>
       <td>${c.teacher}</td>
+      <td>${c.location||'—'}</td>
       <td>${c.time}（${c.duration}分）</td>
       <td>${(c.weekdays||[]).join('、')}</td>
       <td>${c.cap} 人</td>
@@ -880,8 +884,9 @@ function pageClasses(){
 
   return `
     <div class="page-title">課程設定</div>
-    <div class="page-sub">管理每週固定課表，並用下方日曆快速調整單一天的課程內容。</div>
+    <div class="page-sub">管理每週固定課表，並用右邊日曆快速調整單一天的課程內容。</div>
 
+    <div class="two-col-row">
     <div class="panel">
       <div class="panel-head">
         <h3>目前課程範本</h3>
@@ -889,8 +894,8 @@ function pageClasses(){
       </div>
       <div class="panel-body pad0">
         <table>
-          <thead><tr><th>課程名稱</th><th>授課老師</th><th>時段</th><th>上課星期</th><th>容納人數</th><th></th></tr></thead>
-          <tbody>${rows || '<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:20px;">尚無課程範本，點右上角「＋ 新增課程」開始設定</td></tr>'}</tbody>
+          <thead><tr><th>課程名稱</th><th>授課老師</th><th>地點</th><th>時段</th><th>上課星期</th><th>容納人數</th><th></th></tr></thead>
+          <tbody>${rows || '<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:20px;">尚無課程範本，點右上角「＋ 新增課程」開始設定</td></tr>'}</tbody>
         </table>
       </div>
 
@@ -908,6 +913,7 @@ function pageClasses(){
           <div class="field"><label>授課老師</label>
             <select id="ncTeacher">${data.teachers.map(t=>`<option value="${t.name}" ${editing && editing.teacher===t.name?'selected':''}>${t.name}</option>`).join('')}</select>
           </div>
+          <div class="field"><label>上課地點（選填）</label><input id="ncLocation" placeholder="例如：忠孝教室" value="${editing ? (editing.location||'') : ''}"></div>
           <div class="field"><label>上課時間</label><input id="ncTime" type="time" value="${editing ? editing.time : '10:00'}"></div>
           <div class="field"><label>課程長度（分鐘）</label><input id="ncDuration" type="number" value="${editing ? editing.duration : 60}"></div>
           <div class="field"><label>可預約人數上限</label><input id="ncCap" type="number" value="${editing ? editing.cap : 12}"></div>
@@ -929,6 +935,7 @@ function pageClasses(){
           <div class="field"><label>授課老師</label>
             <select id="ovExtraTeacher">${data.teachers.map(t=>`<option value="${t.name}" ${singleDayFormPrefill && singleDayFormPrefill.teacher===t.name ? 'selected':''}>${t.name}</option>`).join('')}</select>
           </div>
+          <div class="field"><label>上課地點（選填）</label><input id="ovExtraLocation" placeholder="例如：忠孝教室" value="${singleDayFormPrefill ? (singleDayFormPrefill.location||'') : ''}"></div>
           <div class="field"><label>上課時間</label><input id="ovExtraTime" type="time" value="${singleDayFormPrefill ? singleDayFormPrefill.time : '10:00'}"></div>
           <div class="field"><label>人數上限</label><input id="ovExtraCap" type="number" value="${singleDayFormPrefill ? singleDayFormPrefill.cap : 12}"></div>
           <div class="field" style="grid-column:1/-1;"><label>課程介紹（選填）</label><textarea id="ovExtraDescription" style="min-height:60px;">${singleDayFormPrefill ? singleDayFormPrefill.description : ''}</textarea></div>
@@ -953,6 +960,7 @@ function pageClasses(){
         </div>
       </div>
     </div>
+    </div>
 
     ${exceptionRows.length ? `
     <div class="panel">
@@ -973,6 +981,7 @@ function pageClasses(){
       </div>
     </div>` : ''}
 
+    <div class="two-col-row">
     <div class="panel">
       <div class="panel-head"><h3>開放預約時間</h3></div>
       <div class="panel-body">
@@ -988,7 +997,7 @@ function pageClasses(){
             <div class="field"><label>開始日期</label><input id="bwStart" type="date" value="${n.booking_open_start||''}"></div>
             <div class="field"><label>結束日期</label><input id="bwEnd" type="date" value="${n.booking_open_end||''}"></div>
           </div>
-          <div style="display:flex;gap:8px;margin-top:10px;justify-content:flex-end;align-items:center;">
+          <div style="display:flex;gap:8px;margin-top:10px;justify-content:flex-end;align-items:center;flex-wrap:wrap;">
             <label style="font-size:12px;color:var(--muted);">未設定區間時，預設開放未來
               <input type="number" value="${n.booking_window_days}" style="width:55px;border:1px solid var(--line);border-radius:8px;padding:5px 8px;font-size:12.5px;" onchange="updateNotify('booking_window_days', Number(this.value))">
               天
@@ -1010,6 +1019,7 @@ function pageClasses(){
           </div>
         </div>
       </div>
+    </div>
     </div>`;
 }
 
@@ -1026,6 +1036,7 @@ function cancelEditClass(){
 async function saveClassForm(){
   const title = document.getElementById('ncTitle').value.trim();
   const teacher = document.getElementById('ncTeacher').value;
+  const location = document.getElementById('ncLocation').value.trim();
   const time = document.getElementById('ncTime').value;
   const duration = Number(document.getElementById('ncDuration').value)||60;
   const cap = Number(document.getElementById('ncCap').value)||10;
@@ -1036,14 +1047,14 @@ async function saveClassForm(){
   if(!teacher){ showToast('請先在「老師管理」新增至少一位老師'); return; }
 
   if(editingClassId){
-    const { error } = await db.from('class_templates').update({ title, teacher, time, duration, cap, weekdays, description }).eq('id', editingClassId);
+    const { error } = await db.from('class_templates').update({ title, teacher, location, time, duration, cap, weekdays, description }).eq('id', editingClassId);
     if(error){ showToast('儲存失敗，請稍後再試'); console.error(error); return; }
     editingClassId = null;
     await loadAdminState();
     showToast('已儲存修改');
     render();
   } else {
-    const { error } = await db.from('class_templates').insert({ title, teacher, time, duration, cap, weekdays, description, active:true });
+    const { error } = await db.from('class_templates').insert({ title, teacher, location, time, duration, cap, weekdays, description, active:true });
     if(error){ showToast('新增失敗，請稍後再試'); console.error(error); return; }
     await loadAdminState();
     showToast('已新增課程範本，將自動套用到未來課表');
@@ -1062,10 +1073,11 @@ async function addExtraOverride(){
   const teacher = document.getElementById('ovExtraTeacher').value;
   const time = document.getElementById('ovExtraTime').value;
   const cap = Number(document.getElementById('ovExtraCap').value)||12;
+  const location = document.getElementById('ovExtraLocation').value.trim();
   const description = document.getElementById('ovExtraDescription').value.trim();
   if(!title){ showToast('請輸入課程名稱'); return; }
   if(!teacher){ showToast('請先在「老師管理」新增至少一位老師'); return; }
-  const { error } = await db.from('class_overrides').insert({ type:'extra', date:dayOverrideDate, title, teacher, time, duration:60, cap, description });
+  const { error } = await db.from('class_overrides').insert({ type:'extra', date:dayOverrideDate, title, teacher, time, duration:60, cap, location, description });
   if(error){ showToast('新增失敗'); console.error(error); return; }
   await loadDayOverrides();
   render();
@@ -1091,12 +1103,7 @@ function pageTeachers(){
   return `
     <div class="page-title">老師管理</div>
     <div class="page-sub">老師資料會顯示在學生端課程卡片上（例如「👤 Amy 老師」）。</div>
-    <div class="panel">
-      <div class="panel-head"><h3>老師名單</h3></div>
-      <div class="panel-body pad0">
-        <table><thead><tr><th>姓名</th><th>專長</th><th>聯絡電話</th><th></th></tr></thead><tbody>${rows || '<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:20px;">尚無老師資料</td></tr>'}</tbody></table>
-      </div>
-    </div>
+    <div class="two-col-row">
     <div class="panel">
       <div class="panel-head"><h3>新增老師</h3></div>
       <div class="panel-body">
@@ -1107,6 +1114,13 @@ function pageTeachers(){
         </div>
       </div>
       <div class="add-bar"><button class="btn btn-primary" onclick="addTeacher()">＋ 新增老師</button></div>
+    </div>
+    <div class="panel">
+      <div class="panel-head"><h3>老師名單</h3></div>
+      <div class="panel-body pad0">
+        <table><thead><tr><th>姓名</th><th>專長</th><th>聯絡電話</th><th></th></tr></thead><tbody>${rows || '<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:20px;">尚無老師資料</td></tr>'}</tbody></table>
+      </div>
+    </div>
     </div>`;
 }
 async function addTeacher(){
@@ -2434,16 +2448,20 @@ function pageRoster(){
   return `
     <div class="page-title">每日名單</div>
     <div class="page-sub">點日曆上的日期查看當天每堂課有哪些學員預約。日曆上的綠點代表還有名額、紅點代表已經額滿。</div>
-    <div class="panel">
-      <div class="panel-body">
-        ${buildRosterCalendarHTML()}
-        <div class="field" style="max-width:220px;margin-top:16px;">
-          <label>或直接選擇日期</label>
-          <input type="date" value="${rosterDate}" onchange="onRosterDateChange(this.value)">
+    <div class="roster-layout">
+      <div class="panel">
+        <div class="panel-body">
+          ${buildRosterCalendarHTML()}
+          <div class="field" style="margin-top:16px;">
+            <label>或直接選擇日期</label>
+            <input type="date" value="${rosterDate}" onchange="onRosterDateChange(this.value)">
+          </div>
         </div>
       </div>
-    </div>
-    ${groupsHtml || '<div class="panel"><div class="panel-body" style="text-align:center;color:var(--muted);padding:30px;">這天沒有任何預約紀錄</div></div>'}`;
+      <div class="roster-list">
+        ${groupsHtml || '<div class="panel"><div class="panel-body" style="text-align:center;color:var(--muted);padding:30px;">這天沒有任何預約紀錄</div></div>'}
+      </div>
+    </div>`;
 }
 
 /* ================= 老師教學紀錄 ================= */
@@ -3102,6 +3120,7 @@ function pageRegistration(){
       </div>
     </div>
 
+    <div class="two-col-row">
     <div class="panel">
       <div class="panel-head"><h3>新增問題</h3></div>
       <div class="panel-body">
@@ -3133,6 +3152,7 @@ function pageRegistration(){
     <div class="panel">
       <div class="panel-head"><h3>目前的問題（照這個順序顯示在表單上）</h3></div>
       <div class="panel-body pad0">${fixedFieldRows}${rows || '<div class="empty-state" style="padding:24px;color:var(--muted);text-align:center;">目前沒有其他自訂問題，上面新增一個看看吧</div>'}</div>
+    </div>
     </div>`;
 }
 
@@ -3148,37 +3168,118 @@ async function goToMemberFromRegistrants(lineUserId){
   await openMemberDetail(lineUserId);
 }
 
+/* ---- 學員資料表格的欄位設定（顯示／隱藏、排序），存在瀏覽器 localStorage，每台裝置各自記憶 ---- */
+const REGISTRANTS_COLUMNS_KEY = 'admin-registrants-columns-v1';
+function registrantFieldDefs(){
+  return [
+    { key:'display_name', label:'學員（LINE 顯示名稱）' },
+    { key:'registration_name', label:'註冊姓名' },
+    { key:'registration_contact', label:'e-mail' },
+    { key:'registration_submitted_at', label:'填寫時間' },
+    ...registrationQuestions.map(q=>({ key:'q_'+q.id, label:q.question, qid:q.id }))
+  ];
+}
+function loadRegistrantColumnPrefs(){
+  const fields = registrantFieldDefs();
+  let saved = null;
+  try{ saved = JSON.parse(localStorage.getItem(REGISTRANTS_COLUMNS_KEY)||'null'); }catch(e){}
+  let order;
+  if(saved && Array.isArray(saved)){
+    order = saved.filter(o=>fields.some(f=>f.key===o.key)); // 濾掉已經刪除的問題欄位
+    const known = new Set(order.map(o=>o.key));
+    fields.forEach(f=>{ if(!known.has(f.key)) order.push({ key:f.key, visible:true }); }); // 補上新出現的欄位（例如新加的註冊問題）
+  } else {
+    order = fields.map(f=>({ key:f.key, visible:true }));
+  }
+  return order;
+}
+function saveRegistrantColumnPrefs(order){
+  localStorage.setItem(REGISTRANTS_COLUMNS_KEY, JSON.stringify(order));
+}
+function moveRegistrantColumn(key, dir){
+  const order = loadRegistrantColumnPrefs();
+  const idx = order.findIndex(o=>o.key===key);
+  const swapIdx = idx+dir;
+  if(idx<0 || swapIdx<0 || swapIdx>=order.length) return;
+  [order[idx], order[swapIdx]] = [order[swapIdx], order[idx]];
+  saveRegistrantColumnPrefs(order);
+  render();
+}
+function toggleRegistrantColumn(key){
+  const order = loadRegistrantColumnPrefs();
+  const item = order.find(o=>o.key===key);
+  if(item) item.visible = !item.visible;
+  saveRegistrantColumnPrefs(order);
+  render();
+}
+function registrantCellValue(m, field){
+  if(field.key==='display_name'){
+    const avatar = m.picture_url
+      ? `<img src="${m.picture_url}" class="avatar-sm" style="object-fit:cover;">`
+      : `<span class="avatar-sm">${(m.display_name||'?')[0]}</span>`;
+    return `${avatar}${m.display_name||'（未知學員）'}`;
+  }
+  if(field.key==='registration_name') return m.registration_name || '—';
+  if(field.key==='registration_contact') return m.registration_contact || '—';
+  if(field.key==='registration_submitted_at') return m.registration_submitted_at ? new Date(m.registration_submitted_at).toLocaleDateString('zh-TW') : '—';
+  if(field.qid){ const ans = (m.registration_answers||{})[field.qid]; return (ans!=null && ans!=='') ? ans : '—'; }
+  return '—';
+}
+
 function pageRegistrants(){
   const registered = [...data.members].filter(m=>m.registration_submitted_at)
     .sort((a,b)=> new Date(b.registration_submitted_at) - new Date(a.registration_submitted_at));
   const notRegisteredCount = data.members.length - registered.length;
 
-  const rows = registered.map(m=>{
-    const avatar = m.picture_url
-      ? `<img src="${m.picture_url}" class="avatar-sm" style="object-fit:cover;">`
-      : `<span class="avatar-sm">${(m.display_name||'?')[0]}</span>`;
+  const fields = registrantFieldDefs();
+  const columnOrder = loadRegistrantColumnPrefs();
+  const visibleFields = columnOrder.filter(c=>c.visible).map(c=>fields.find(f=>f.key===c.key)).filter(Boolean);
+
+  const columnConfigRows = columnOrder.map((c,i)=>{
+    const field = fields.find(f=>f.key===c.key);
+    if(!field) return '';
     return `
-    <tr>
-      <td>${avatar}${m.display_name||'（未知學員）'}</td>
-      <td>${m.registration_name||'—'}</td>
-      <td>${m.registration_contact||'—'}</td>
-      <td>${new Date(m.registration_submitted_at).toLocaleDateString('zh-TW')}</td>
-      <td><button class="btn btn-ghost btn-sm" onclick="goToMemberFromRegistrants('${m.line_user_id}')">查看／管理</button></td>
-    </tr>`;
+      <div class="q-row">
+        <div class="q-order">
+          <button onclick="moveRegistrantColumn('${c.key}',-1)" ${i===0?'disabled':''}>▲</button>
+          <button onclick="moveRegistrantColumn('${c.key}',1)" ${i===columnOrder.length-1?'disabled':''}>▼</button>
+        </div>
+        <div class="q-main"><div class="q-text">${field.label}</div></div>
+        <div class="q-actions">
+          <label style="display:flex;align-items:center;gap:5px;font-size:11.5px;color:var(--muted);cursor:pointer;white-space:nowrap;" title="顯示／隱藏">
+            <div class="toggle ${c.visible?'on':''}" onclick="toggleRegistrantColumn('${c.key}')"><div class="knob"></div></div>顯示
+          </label>
+        </div>
+      </div>`;
   }).join('');
+
+  const rows = registered.map(m=>`
+    <tr>
+      ${visibleFields.map(f=>`<td>${registrantCellValue(m, f)}</td>`).join('')}
+      <td><button class="btn btn-ghost btn-sm" onclick="goToMemberFromRegistrants('${m.line_user_id}')">查看／管理</button></td>
+    </tr>`).join('');
 
   return `
     <div class="page-title">學員資料</div>
-    <div class="page-sub">所有已經填寫過「會員註冊」表單的學員資料。點「查看／管理」會進到該學員完整的詳細頁面（堂數、預約、消費、註冊資料都在同一頁）。</div>
+    <div class="page-sub">所有已經填寫過「會員註冊」表單的學員資料，包含每一題的填寫內容。點「查看／管理」會進到該學員完整的詳細頁面（堂數、預約、消費、註冊資料都在同一頁）。</div>
     <div class="stat-cards" style="grid-template-columns:repeat(2,1fr);">
       <div class="stat-card"><div class="num">${registered.length}</div><div class="lbl">已填寫註冊資料</div></div>
       <div class="stat-card"><div class="num">${notRegisteredCount}</div><div class="lbl">尚未填寫</div></div>
     </div>
+
+    <div class="panel">
+      <div class="panel-head"><h3>欄位設定</h3></div>
+      <div class="page-sub" style="margin:0 0 10px;padding:0 20px;">勾選要在下方表格顯示的欄位，用 ▲▼ 調整顯示順序（包含每一題註冊問題的答案）。</div>
+      <div class="panel-body pad0">${columnConfigRows}</div>
+    </div>
+
     <div class="panel">
       <div class="panel-head"><h3>已註冊學員</h3></div>
-      <div class="panel-body pad0">
-        <table><thead><tr><th>學員</th><th>註冊姓名</th><th>e-mail</th><th>填寫時間</th><th></th></tr></thead>
-        <tbody>${rows || '<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:24px;">目前還沒有學員填寫過會員註冊表單</td></tr>'}</tbody></table>
+      <div class="panel-body pad0" style="overflow-x:auto;">
+        ${visibleFields.length===0
+          ? '<div style="text-align:center;color:var(--muted);padding:24px;">目前所有欄位都被隱藏了，請到上面「欄位設定」至少開啟一個欄位</div>'
+          : `<table><thead><tr>${visibleFields.map(f=>`<th>${f.label}</th>`).join('')}<th></th></tr></thead>
+        <tbody>${rows || `<tr><td colspan="${visibleFields.length+1}" style="text-align:center;color:var(--muted);padding:24px;">目前還沒有學員填寫過會員註冊表單</td></tr>`}</tbody></table>`}
       </div>
     </div>`;
 }
