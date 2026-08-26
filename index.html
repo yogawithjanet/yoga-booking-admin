@@ -42,6 +42,10 @@
   .nav-item .ic{width:18px;text-align:center;}
   .nav-item:hover{background:rgba(255,255,255,.06);}
   .nav-item.active{background:rgba(255,255,255,.1);color:#fff;border-left-color:var(--clay);}
+  .nav-group-title{
+    padding:16px 22px 6px;font-size:10.5px;font-weight:700;letter-spacing:1px;
+    color:rgba(255,255,255,.45);text-transform:uppercase;
+  }
 
   /* ---- Main ---- */
   .main{flex:1;padding:30px 36px;max-width:1220px;}
@@ -209,6 +213,14 @@
     background:var(--sage);color:#fff;border-radius:50%;width:20px;height:20px;font-size:11px;
   }
 
+  /* ---- 每日名單：日曆上的額滿標示（綠點=還有名額，紅點=已額滿） ---- */
+  .roster-dots{display:flex;flex-wrap:wrap;gap:3px;justify-content:center;margin-top:4px;}
+  .roster-dot{width:6px;height:6px;border-radius:50%;background:#3fa35e;flex-shrink:0;}
+  .roster-dot.full{background:#d1503a;}
+  .roster-legend{display:flex;align-items:center;gap:6px;justify-content:center;padding-top:12px;margin-top:8px;border-top:1px solid var(--line);font-size:11.5px;color:var(--muted);}
+  .roster-legend .roster-dot{margin-left:10px;}
+  .roster-legend .roster-dot:first-child{margin-left:0;}
+
   .toast{
     position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(20px);
     background:var(--ink);color:#fff;padding:11px 20px;border-radius:30px;font-size:13px;
@@ -237,6 +249,61 @@
   .sidebar-bottom{margin-top:auto;padding:14px 22px 0;border-top:1px solid rgba(255,255,255,.12);}
   .logout-link{color:rgba(255,255,255,.65);font-size:12.5px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;}
   .logout-link:hover{color:#fff;}
+
+  .two-col-row{display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:stretch;}
+
+  /* ---- 手機版選單開關（桌面版預設隱藏） ---- */
+  .mobile-topbar{display:none;}
+  .mobile-nav-toggle{
+    border:none;background:rgba(255,255,255,.15);color:#fff;width:34px;height:34px;
+    border-radius:9px;font-size:18px;cursor:pointer;flex-shrink:0;
+  }
+  .sidebar-backdrop{display:none;}
+
+  /* ================= 響應式設計：手機／平板 ================= */
+  @media (max-width: 860px){
+    #app{flex-direction:column;}
+    .sidebar{
+      position:fixed;top:0;left:-270px;bottom:0;width:250px;height:100vh;
+      z-index:110;transition:left .22s ease;box-shadow:2px 0 16px rgba(0,0,0,.2);
+    }
+    .sidebar.open{left:0;}
+    .sidebar-backdrop{
+      display:block;position:fixed;inset:0;background:rgba(0,0,0,0);pointer-events:none;
+      transition:background .22s ease;z-index:105;
+    }
+    .sidebar-backdrop.show{background:rgba(0,0,0,.4);pointer-events:auto;}
+
+    .mobile-topbar{
+      display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:40;
+      background:var(--sage-dark);color:#fff;padding:12px 16px;font-weight:700;font-size:14.5px;
+    }
+
+    .main{padding:18px 14px 50px;max-width:100%;}
+    .page-title{font-size:18px;}
+
+    .form-grid{grid-template-columns:1fr;}
+    .two-col-row{grid-template-columns:1fr;gap:14px;}
+    .action-row{grid-template-columns:1fr;}
+    .stat-cards{grid-template-columns:repeat(2,1fr);}
+
+    .panel-body.pad0{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+    .panel-body.pad0 table{min-width:560px;}
+
+    .q-row{flex-wrap:wrap;}
+    .q-actions{flex-wrap:wrap;row-gap:6px;}
+    .row-actions{flex-wrap:wrap;justify-content:flex-start;}
+
+    .mc-cell{min-height:60px;}
+    .mc-month-label{font-size:14px;}
+
+    .panel-head{flex-wrap:wrap;gap:8px;}
+  }
+
+  @media (max-width: 480px){
+    .stat-cards{grid-template-columns:1fr 1fr;}
+    .action-card{padding:18px;}
+  }
 </style>
 </head>
 <body>
@@ -283,17 +350,31 @@
 <div id="app" style="display:none;">
   <div class="sidebar">
     <div class="brand" id="sidebarBrand">團課教室<span>後台管理系統</span></div>
-    <div class="nav-item active" data-page="overview"><span class="ic">📊</span>總覽</div>
-    <div class="nav-item" data-page="store"><span class="ic">🏠</span>店家設定</div>
-    <div class="nav-item" data-page="cashflow"><span class="ic">💰</span>金流管理</div>
-    <div class="nav-item" data-page="classes"><span class="ic">🗓️</span>課程設定</div>
-    <div class="nav-item" data-page="roster"><span class="ic">📋</span>每日名單</div>
-    <div class="nav-item" data-page="registration"><span class="ic">📝</span>報名表單設定</div>
+    <div class="nav-item active" data-page="overview"><span class="ic">📊</span>總覽與店家設定</div>
+
+    <div class="nav-group-title">學員相關</div>
     <div class="nav-item" data-page="members"><span class="ic">👥</span>學員管理</div>
+    <div class="nav-item" data-page="registrants"><span class="ic">🗂️</span>學員資料</div>
+    <div class="nav-item" data-page="registration"><span class="ic">📝</span>註冊表單設計</div>
+
+    <div class="nav-group-title">課程相關</div>
+    <div class="nav-item" data-page="roster"><span class="ic">📋</span>每日名單</div>
+    <div class="nav-item" data-page="classes"><span class="ic">🗓️</span>課程設定</div>
+    <div class="nav-item" data-page="popularity"><span class="ic">🔥</span>課程熱門度</div>
+
+    <div class="nav-group-title">老師／教練相關</div>
     <div class="nav-item" data-page="teachers"><span class="ic">🧑‍🏫</span>老師管理</div>
     <div class="nav-item" data-page="teacherlog"><span class="ic">📈</span>老師教學紀錄</div>
-    <div class="nav-item" data-page="popularity"><span class="ic">🔥</span>課程熱門度</div>
+
+    <div class="nav-item" data-page="cashflow" style="margin-top:14px;border-top:1px solid rgba(255,255,255,.12);padding-top:15px;"><span class="ic">💰</span>金流管理</div>
     <div class="sidebar-bottom"><span class="logout-link" onclick="logout()">🚪 登出</span></div>
+  </div>
+
+  <div class="sidebar-backdrop" id="sidebarBackdrop" onclick="closeMobileNav()"></div>
+
+  <div class="mobile-topbar">
+    <button class="mobile-nav-toggle" onclick="openMobileNav()" aria-label="開啟選單">☰</button>
+    <span id="mobileTopbarBrand">團課教室</span>
   </div>
 
   <div class="main" id="mainArea"></div>
@@ -459,12 +540,20 @@ function showToast(msg){
 let currentPage = 'overview';
 const WEEKDAYS = ['一','二','三','四','五','六','日'];
 
-/* ================= 總覽 ================= */
+/* ================= 總覽與店家設定 ================= */
 function pageOverview(){
   const activeClasses = data.classes.filter(c=>c.active).length;
+  const s = data.store;
+  const currentTheme = s.theme || 'sage';
+  const swatches = Object.entries(THEMES).map(([key, t])=>`
+    <div onclick="pickTheme('${key}')" style="cursor:pointer;text-align:center;">
+      <div style="width:40px;height:40px;border-radius:50%;margin:0 auto 6px;background:linear-gradient(135deg, ${t.sage}, ${t.clay});border:3px solid ${key===currentTheme?'var(--ink)':'transparent'};box-shadow:0 1px 3px rgba(0,0,0,.15);"></div>
+      <div style="font-size:11.5px;color:${key===currentTheme?'var(--ink)':'var(--muted)'};font-weight:${key===currentTheme?'700':'400'};">${t.name}</div>
+    </div>`).join('');
+
   return `
-    <div class="page-title">總覽</div>
-    <div class="page-sub">這裡是後台管理員（老師／店家）看到的畫面，資料會即時同步到學生端的 LINE 介面。</div>
+    <div class="page-title">總覽與店家設定</div>
+    <div class="page-sub">這裡是後台管理員（老師／店家）看到的畫面，資料會即時同步到學生端的 LINE 介面。店家名稱會顯示在學生端 LINE 介面頂部，以及後台左側選單。</div>
     <div class="stat-cards">
       <div class="stat-card"><div class="num">${activeClasses}</div><div class="lbl">上架中課程範本</div></div>
       <div class="stat-card"><div class="num">${data.teachers.length}</div><div class="lbl">授課老師</div></div>
@@ -472,6 +561,49 @@ function pageOverview(){
       <div class="stat-card"><div class="num">${data.members.length}</div><div class="lbl">已加入學員</div></div>
     </div>
     <div class="hint-box">💡 沒有串接金流，所以不需要「線上購買方案」。學生的堂數改由<b>老師／管理員在「學員管理」手動增加</b>（例如收現金、轉帳後手動加堂），系統只負責預約時自動扣堂、取消時自動退堂。</div>
+
+    <div class="panel">
+      <div class="panel-head"><h3>外觀主題</h3></div>
+      <div class="panel-body">
+        <div class="desc" style="margin-bottom:14px;">選一個配色，前台跟後台會同步套用。</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(70px, 1fr));gap:12px;">${swatches}</div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h3>基本資料</h3></div>
+      <div class="panel-body">
+        <div class="form-grid">
+          <div class="field"><label>店家 / 品牌名稱</label><input id="stName" value="${s.name}" placeholder="例如：你的教室名稱"></div>
+        </div>
+      </div>
+      <div class="add-bar"><button class="btn btn-primary" onclick="saveStore()">儲存設定</button></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h3>登入密碼</h3></div>
+      <div class="panel-body">
+        <div class="hint-box">🔑 這組密碼存在資料庫裡，不管在哪台裝置登入後台都是同一組。建議定期更換，且不要跟其他平台密碼相同。</div>
+        <div class="form-grid">
+          <div class="field"><label>新密碼</label><input id="stNewPw" type="password" placeholder="至少 6 碼"></div>
+          <div class="field"><label>再次輸入新密碼</label><input id="stNewPw2" type="password" placeholder="請再輸入一次"></div>
+        </div>
+      </div>
+      <div class="add-bar"><button class="btn btn-primary" onclick="changePassword()">更新密碼</button></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h3>忘記密碼用的安全問題</h3></div>
+      <div class="panel-body">
+        <div class="hint-box">💡 如果忘記密碼，登入畫面可以點「忘記密碼？」，回答這個問題答對就能重設密碼。答案不分大小寫。</div>
+        <div class="form-grid">
+          <div class="field" style="grid-column:1/-1"><label>安全問題</label><input id="stSecQ" value="${s.security_question||''}" placeholder="例如：你的教室最早是在哪一年成立的？"></div>
+          <div class="field" style="grid-column:1/-1"><label>答案</label><input id="stSecA" value="${s.security_answer||''}" placeholder="請設定答案"></div>
+        </div>
+      </div>
+      <div class="add-bar"><button class="btn btn-primary" onclick="saveSecurityQA()">儲存安全問題</button></div>
+    </div>
+
     <div class="panel">
       <div class="panel-head"><h3>後台可以設定的項目</h3></div>
       <div class="panel-body">
@@ -994,62 +1126,6 @@ async function removeTeacher(id){
   await loadAdminState(); render(); showToast('已刪除');
 }
 
-/* ================= 店家設定 ================= */
-function pageStore(){
-  const s = data.store;
-  const currentTheme = s.theme || 'sage';
-  const swatches = Object.entries(THEMES).map(([key, t])=>`
-    <div onclick="pickTheme('${key}')" style="cursor:pointer;text-align:center;">
-      <div style="width:40px;height:40px;border-radius:50%;margin:0 auto 6px;background:linear-gradient(135deg, ${t.sage}, ${t.clay});border:3px solid ${key===currentTheme?'var(--ink)':'transparent'};box-shadow:0 1px 3px rgba(0,0,0,.15);"></div>
-      <div style="font-size:11.5px;color:${key===currentTheme?'var(--ink)':'var(--muted)'};font-weight:${key===currentTheme?'700':'400'};">${t.name}</div>
-    </div>`).join('');
-
-  return `
-    <div class="page-title">店家設定</div>
-    <div class="page-sub">這裡設定的店家名稱，會顯示在學生端 LINE 介面的頂部（例如「○○○官方帳號」），以及後台左側選單。</div>
-
-    <div class="panel">
-      <div class="panel-head"><h3>外觀主題</h3></div>
-      <div class="panel-body">
-        <div class="desc" style="margin-bottom:14px;">選一個配色，前台跟後台會同步套用。</div>
-        <div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(70px, 1fr));gap:12px;">${swatches}</div>
-      </div>
-    </div>
-
-    <div class="panel">
-      <div class="panel-head"><h3>基本資料</h3></div>
-      <div class="panel-body">
-        <div class="form-grid">
-          <div class="field"><label>店家 / 品牌名稱</label><input id="stName" value="${s.name}" placeholder="例如：你的教室名稱"></div>
-        </div>
-      </div>
-      <div class="add-bar"><button class="btn btn-primary" onclick="saveStore()">儲存設定</button></div>
-    </div>
-
-    <div class="panel">
-      <div class="panel-head"><h3>登入密碼</h3></div>
-      <div class="panel-body">
-        <div class="hint-box">🔑 這組密碼存在資料庫裡，不管在哪台裝置登入後台都是同一組。建議定期更換，且不要跟其他平台密碼相同。</div>
-        <div class="form-grid">
-          <div class="field"><label>新密碼</label><input id="stNewPw" type="password" placeholder="至少 6 碼"></div>
-          <div class="field"><label>再次輸入新密碼</label><input id="stNewPw2" type="password" placeholder="請再輸入一次"></div>
-        </div>
-      </div>
-      <div class="add-bar"><button class="btn btn-primary" onclick="changePassword()">更新密碼</button></div>
-    </div>
-
-    <div class="panel">
-      <div class="panel-head"><h3>忘記密碼用的安全問題</h3></div>
-      <div class="panel-body">
-        <div class="hint-box">💡 如果忘記密碼，登入畫面可以點「忘記密碼？」，回答這個問題答對就能重設密碼。答案不分大小寫。</div>
-        <div class="form-grid">
-          <div class="field" style="grid-column:1/-1"><label>安全問題</label><input id="stSecQ" value="${s.security_question||''}" placeholder="例如：你的教室最早是在哪一年成立的？"></div>
-          <div class="field" style="grid-column:1/-1"><label>答案</label><input id="stSecA" value="${s.security_answer||''}" placeholder="請設定答案"></div>
-        </div>
-      </div>
-      <div class="add-bar"><button class="btn btn-primary" onclick="saveSecurityQA()">儲存安全問題</button></div>
-    </div>`;
-}
 function changePassword(){
   const pw1 = document.getElementById('stNewPw').value;
   const pw2 = document.getElementById('stNewPw2').value;
@@ -1919,7 +1995,7 @@ function pageMemberDetail(){
       <div class="panel-body" style="text-align:center;color:var(--muted);padding:20px;">這位學員還沒填過會員註冊資料</div>`}
     </div>
 
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:stretch;">
+    <div class="two-col-row">
       <div class="panel" style="display:flex;flex-direction:column;">
         <div class="panel-head"><h3>新增堂數</h3></div>
         <div class="panel-body">
@@ -2238,6 +2314,9 @@ async function adjustMember(lineUserId, delta){
 /* ================= 每日名單 ================= */
 let rosterDate = new Date().toISOString().slice(0,10);
 let rosterData = [];
+const rosterTodayNow = new Date();
+let rosterCalendarView = { year: rosterTodayNow.getFullYear(), month: rosterTodayNow.getMonth()+1 };
+let rosterMonthCounts = {}; // class_key -> 這個月的有效預約人數，用來判斷額滿（畫紅點）
 
 async function loadRoster(){
   const { data: rows, error } = await db.from('bookings')
@@ -2248,8 +2327,88 @@ async function loadRoster(){
 }
 async function onRosterDateChange(val){
   rosterDate = val;
+  const [y,m] = val.split('-').map(Number);
+  if(y!==rosterCalendarView.year || m!==rosterCalendarView.month){
+    rosterCalendarView = { year:y, month:m };
+    await loadRosterMonthCounts();
+  }
   await loadRoster();
   render();
+}
+async function loadRosterMonthCounts(){
+  const { year, month } = rosterCalendarView;
+  const daysInMonth = new Date(year, month, 0).getDate();
+  const startIso = `${year}-${String(month).padStart(2,'0')}-01`;
+  const endIso = `${year}-${String(month).padStart(2,'0')}-${String(daysInMonth).padStart(2,'0')}`;
+  const { data: rows, error } = await db.from('bookings')
+    .select('class_key')
+    .eq('status', 'active')
+    .gte('class_date_iso', startIso)
+    .lte('class_date_iso', endIso);
+  rosterMonthCounts = {};
+  if(!error && rows) rows.forEach(b=>{ rosterMonthCounts[b.class_key] = (rosterMonthCounts[b.class_key]||0) + 1; });
+}
+async function selectRosterCalendarDate(iso){
+  rosterDate = iso;
+  await loadRoster();
+  render();
+}
+async function changeRosterCalendarMonth(delta){
+  let { year, month } = rosterCalendarView;
+  month += delta;
+  if(month<1){ month=12; year--; }
+  if(month>12){ month=1; year++; }
+  rosterCalendarView = { year, month };
+  await loadRosterMonthCounts();
+  render();
+}
+
+function buildRosterCalendarHTML(){
+  const { year, month } = rosterCalendarView;
+  const startWeekday = new Date(year, month-1, 1).getDay();
+  const daysInMonth = new Date(year, month, 0).getDate();
+  const todayIso = todayISO(0);
+
+  let cells = '';
+  for(let i=0;i<startWeekday;i++) cells += `<div class="mc-cell empty"></div>`;
+  for(let day=1; day<=daysInMonth; day++){
+    const iso = `${year}-${String(month).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+    const dateKey = isoToDateKey(iso);
+    const { recurring, extras } = getDayOccurrences(iso);
+    const sessions = [
+      ...recurring.map(c=>({ classKey:`${dateKey}_${c.id}`, cap:c.cap })),
+      ...extras.map(o=>({ classKey:`${dateKey}_extra_${o.id}`, cap:o.cap }))
+    ];
+    const isSelected = iso===rosterDate;
+    const isToday = iso===todayIso;
+    let cls = 'mc-cell';
+    if(isSelected) cls += ' selected';
+    if(isToday) cls += ' today';
+
+    const dotsHtml = sessions.length>0
+      ? `<div class="roster-dots">${sessions.map(s=>{
+          const isFull = (rosterMonthCounts[s.classKey]||0) >= s.cap;
+          return `<span class="roster-dot ${isFull?'full':'open'}"></span>`;
+        }).join('')}</div>`
+      : '';
+
+    cells += `<div class="${cls}" onclick="selectRosterCalendarDate('${iso}')">
+      <span class="mc-daynum">${day}</span>
+      ${dotsHtml}
+    </div>`;
+  }
+
+  return `
+    <div class="mini-calendar">
+      <div class="mc-header">
+        <button class="mc-nav" onclick="changeRosterCalendarMonth(-1)">‹</button>
+        <span class="mc-month-label">${year} 年 ${month} 月</span>
+        <button class="mc-nav" onclick="changeRosterCalendarMonth(1)">›</button>
+      </div>
+      <div class="mc-weekdays">${['日','一','二','三','四','五','六'].map(w=>`<span>${w}</span>`).join('')}</div>
+      <div class="mc-grid">${cells}</div>
+      <div class="roster-legend"><span class="roster-dot open"></span>還有名額　<span class="roster-dot full"></span>已額滿</div>
+    </div>`;
 }
 
 function pageRoster(){
@@ -2274,11 +2433,12 @@ function pageRoster(){
 
   return `
     <div class="page-title">每日名單</div>
-    <div class="page-sub">選擇日期，查看當天每堂課有哪些學員預約。</div>
+    <div class="page-sub">點日曆上的日期查看當天每堂課有哪些學員預約。日曆上的綠點代表還有名額、紅點代表已經額滿。</div>
     <div class="panel">
       <div class="panel-body">
-        <div class="field" style="max-width:220px;">
-          <label>選擇日期</label>
+        ${buildRosterCalendarHTML()}
+        <div class="field" style="max-width:220px;margin-top:16px;">
+          <label>或直接選擇日期</label>
           <input type="date" value="${rosterDate}" onchange="onRosterDateChange(this.value)">
         </div>
       </div>
@@ -2625,7 +2785,7 @@ function pageCashflow(){
       <div class="stat-card"><div class="num">NT$ ${(filteredIncome-filteredExpense).toLocaleString()}</div><div class="lbl">${hasFilter ? '篩選區間淨利' : '全部總淨利'}</div></div>
     </div>
 
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:stretch;">
+    <div class="two-col-row">
       <div class="panel" style="display:flex;flex-direction:column;">
         <div class="panel-head"><h3>手動新增一筆收入／支出</h3></div>
         <div class="panel-body">
@@ -2923,7 +3083,7 @@ function pageRegistration(){
   }).join('');
 
   return `
-    <div class="page-title">報名表單設定</div>
+    <div class="page-title">註冊表單設計</div>
     <div class="page-sub">設定「會員註冊」表單要收集的問題。啟用後，新學員第一次打開前台會直接看到這份表單；已註冊學員可以隨時從「會員資料設定」查看或修改自己填過的答案。每位學員填過的答案，會顯示在「學員管理 → 查看／管理」裡。</div>
 
     <div class="panel" style="border-color:${isPublished?'var(--sage)':'var(--clay)'};">
@@ -2976,11 +3136,68 @@ function pageRegistration(){
     </div>`;
 }
 
-const PAGES = {overview:pageOverview, store:pageStore, cashflow:pageCashflow, classes:pageClasses, teachers:pageTeachers, members:pageMembers, roster:pageRoster, teacherlog:pageTeacherLog, popularity:pagePopularity, registration:pageRegistration};
+/* ================= 學員資料（會員註冊填寫結果） ================= */
+// 點「查看／管理」直接跳去學員管理的詳細頁（同一個學員只有一份完整資料：
+// 堂數、預約、消費、註冊資料都在那一頁），不另外做一份簡化版重複邏輯。
+async function goToMemberFromRegistrants(lineUserId){
+  currentPage = 'members';
+  localStorage.setItem(CURRENT_PAGE_KEY, 'members');
+  document.querySelectorAll('.nav-item').forEach(i=>i.classList.remove('active'));
+  const targetItem = document.querySelector('.nav-item[data-page="members"]');
+  if(targetItem) targetItem.classList.add('active');
+  await openMemberDetail(lineUserId);
+}
+
+function pageRegistrants(){
+  const registered = [...data.members].filter(m=>m.registration_submitted_at)
+    .sort((a,b)=> new Date(b.registration_submitted_at) - new Date(a.registration_submitted_at));
+  const notRegisteredCount = data.members.length - registered.length;
+
+  const rows = registered.map(m=>{
+    const avatar = m.picture_url
+      ? `<img src="${m.picture_url}" class="avatar-sm" style="object-fit:cover;">`
+      : `<span class="avatar-sm">${(m.display_name||'?')[0]}</span>`;
+    return `
+    <tr>
+      <td>${avatar}${m.display_name||'（未知學員）'}</td>
+      <td>${m.registration_name||'—'}</td>
+      <td>${m.registration_contact||'—'}</td>
+      <td>${new Date(m.registration_submitted_at).toLocaleDateString('zh-TW')}</td>
+      <td><button class="btn btn-ghost btn-sm" onclick="goToMemberFromRegistrants('${m.line_user_id}')">查看／管理</button></td>
+    </tr>`;
+  }).join('');
+
+  return `
+    <div class="page-title">學員資料</div>
+    <div class="page-sub">所有已經填寫過「會員註冊」表單的學員資料。點「查看／管理」會進到該學員完整的詳細頁面（堂數、預約、消費、註冊資料都在同一頁）。</div>
+    <div class="stat-cards" style="grid-template-columns:repeat(2,1fr);">
+      <div class="stat-card"><div class="num">${registered.length}</div><div class="lbl">已填寫註冊資料</div></div>
+      <div class="stat-card"><div class="num">${notRegisteredCount}</div><div class="lbl">尚未填寫</div></div>
+    </div>
+    <div class="panel">
+      <div class="panel-head"><h3>已註冊學員</h3></div>
+      <div class="panel-body pad0">
+        <table><thead><tr><th>學員</th><th>註冊姓名</th><th>e-mail</th><th>填寫時間</th><th></th></tr></thead>
+        <tbody>${rows || '<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:24px;">目前還沒有學員填寫過會員註冊表單</td></tr>'}</tbody></table>
+      </div>
+    </div>`;
+}
+
+const PAGES = {overview:pageOverview, cashflow:pageCashflow, classes:pageClasses, teachers:pageTeachers, members:pageMembers, roster:pageRoster, teacherlog:pageTeacherLog, popularity:pagePopularity, registration:pageRegistration, registrants:pageRegistrants};
 
 function render(){
   document.getElementById('sidebarBrand').innerHTML = data.store.name + '<span>後台管理系統</span>';
+  document.getElementById('mobileTopbarBrand').textContent = data.store.name;
   document.getElementById('mainArea').innerHTML = PAGES[currentPage]();
+}
+
+function openMobileNav(){
+  document.querySelector('.sidebar').classList.add('open');
+  document.getElementById('sidebarBackdrop').classList.add('show');
+}
+function closeMobileNav(){
+  document.querySelector('.sidebar').classList.remove('open');
+  document.getElementById('sidebarBackdrop').classList.remove('show');
 }
 
 const CURRENT_PAGE_KEY = 'admin-current-page-v1';
@@ -2995,7 +3212,7 @@ async function navigateToPage(page){
   editingClassId = null;
   if(page==='classes'){ await loadDayOverrides(); }
   if(page==='members'){ await loadMemberStats(); await loadDayOverrides(); }
-  if(page==='roster'){ await loadRoster(); }
+  if(page==='roster'){ await loadDayOverrides(); await Promise.all([loadRoster(), loadRosterMonthCounts()]); }
   if(page==='teacherlog'){ await loadTeacherLog(teacherLogSelected || (data.teachers[0] && data.teachers[0].name) || ''); }
   if(page==='cashflow'){ await loadCashflowData(); }
   if(page==='popularity'){ await loadPopularityData(); }
@@ -3003,7 +3220,7 @@ async function navigateToPage(page){
 }
 
 document.querySelectorAll('.nav-item').forEach(item=>{
-  item.addEventListener('click', ()=>{ navigateToPage(item.dataset.page); });
+  item.addEventListener('click', ()=>{ navigateToPage(item.dataset.page); closeMobileNav(); });
 });
 
 const SESSION_KEY = 'admin-logged-in-v1';
