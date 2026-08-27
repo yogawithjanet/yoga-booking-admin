@@ -160,6 +160,14 @@
   }
   .tag-chip .x{cursor:pointer;font-weight:700;opacity:.7;}
   .tag-chip .x:hover{opacity:1;}
+  .tag-manage-item{position:relative;display:inline-block;}
+  .tag-manage-item .tag-remove-x{
+    position:absolute;top:-6px;right:-6px;width:18px;height:18px;border-radius:50%;
+    background:var(--danger);color:#fff;font-size:10px;line-height:1;
+    display:flex;align-items:center;justify-content:center;cursor:pointer;
+    opacity:0;pointer-events:none;transition:opacity .15s ease;box-shadow:0 1px 3px rgba(0,0,0,.25);
+  }
+  .tag-manage-item:hover .tag-remove-x{opacity:1;pointer-events:auto;}
   .date-row-full{display:flex;gap:8px;margin-bottom:8px;}
   .date-row-full input{flex:1;min-width:0;}
 
@@ -1415,11 +1423,23 @@ async function addAvailableTag(){
   render();
 }
 async function removeAvailableTag(tag){
+  const ok = confirm(`確定刪除嗎？刪除後無法復原，同學的標籤也都會移除。`);
+  if(!ok) return;
   const newTags = (data.store.available_tags||[]).filter(t=>t!==tag);
   const { error } = await db.from('store_settings').update({ available_tags:newTags }).eq('id', 1);
   if(error){ showToast('移除失敗'); console.error(error); return; }
   data.store.available_tags = newTags;
+
+  // 同步把這個標籤從所有已經貼上這個標籤的學員身上移除
+  const affectedMembers = data.members.filter(m=>(m.tags||[]).includes(tag));
+  await Promise.all(affectedMembers.map(m=>{
+    const updatedTags = (m.tags||[]).filter(t=>t!==tag);
+    m.tags = updatedTags;
+    return db.from('members').update({ tags: updatedTags }).eq('line_user_id', m.line_user_id);
+  }));
+
   render();
+  showToast('已刪除標籤');
 }
 
 /* ---- 批次操作共用的選取狀態（學員列表打勾） ---- */
@@ -1580,8 +1600,10 @@ function pageMembers(){
             return `
             <div>
               <div style="display:flex;align-items:center;gap:8px;">
-                <span class="tag-chip" style="cursor:pointer;${tagColorStyle(t)}" onclick="toggleColorPicker('${t}')">${t}</span>
-                <span style="cursor:pointer;color:var(--muted);font-size:11.5px;" onclick="removeAvailableTag('${t}')">移除</span>
+                <span class="tag-manage-item">
+                  <span class="tag-chip" style="cursor:pointer;${tagColorStyle(t)}" onclick="toggleColorPicker('${t}')">${t}</span>
+                  <span class="tag-remove-x" onclick="removeAvailableTag('${t}')" title="刪除標籤">✕</span>
+                </span>
               </div>
               ${isOpen ? `
               <div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:9px;padding-left:2px;">
@@ -1991,6 +2013,11 @@ async function submitBatchBooking(){
     const uniqueDates = [...new Set(dateValues)];
     if(uniqueDates.length===0){ showToast('請至少選擇一個日期'); return; }
 
+    const capacityEntries = uniqueDates
+      .filter(dateVal => (tmpl.weekdays||[]).includes(weekdayLabelOf(dateVal)))
+      .map(dateVal => ({ classKey:`${isoToDateKey(dateVal)}_${tmpl.id}`, label:`${dateVal} ${tmpl.title}`, cap:tmpl.cap, addCount:memberIds.length }));
+    if(!(await checkCapacityBeforeBooking(capacityEntries))) return;
+
     for(const lineUserId of memberIds){
       for(const dateVal of uniqueDates){
         const wd = weekdayLabelOf(dateVal);
@@ -2008,9 +2035,11 @@ async function submitBatchBooking(){
     const override = dayOverrides.find(o=>o.id===id && o.type==='extra');
     if(!override){ showToast('找不到這堂特別課'); return; }
     const dateKey = isoToDateKey(override.date);
+    const classKey = `${dateKey}_extra_${override.id}`;
+    if(!(await checkCapacityBeforeBooking([{ classKey, label:`${override.date} ${override.title}`, cap:override.cap, addCount:memberIds.length }]))) return;
     for(const lineUserId of memberIds){
       const ok = await insertOneBooking(lineUserId, {
-        classKey: `${dateKey}_extra_${override.id}`, classTemplateId: null, title: override.title,
+        classKey, classTemplateId: null, title: override.title,
         classDate: dateKeyToLabel(override.date), classDateIso: override.date,
         time: override.time, teacher: override.teacher, cap: override.cap
       });
@@ -2349,6 +2378,25 @@ function removeDateRow(btn){
   row.remove();
 }
 
+async function getClassKeyBookedCount(classKey){
+  const { data, error } = await db.from('bookings').select('id').eq('class_key', classKey).eq('status', 'active');
+  return (!error && data) ? data.length : 0;
+}
+// 幫學員手動加約時，事先檢查人數上限。entries: [{ classKey, label, cap, addCount }]
+// addCount 是這次操作打算加進這堂課的人數（可能一次好幾位學員）。
+// 若加入後會超過上限，跳出提醒讓管理員自己決定要不要仍然繼續（不強制擋下，畢竟管理員可能就是要通融超收）。
+async function checkCapacityBeforeBooking(entries){
+  const overCapacity = [];
+  for(const e of entries){
+    const current = await getClassKeyBookedCount(e.classKey);
+    if(current + e.addCount > e.cap){
+      overCapacity.push(`・${e.label}：目前 ${current}／${e.cap} 人，加入後會有 ${current + e.addCount} 人`);
+    }
+  }
+  if(overCapacity.length===0) return true;
+  return confirm(`⚠️ 以下課程加入後會超過人數上限：\n\n${overCapacity.join('\n')}\n\n確定仍要繼續新增這些預約嗎？`);
+}
+
 async function insertOneBooking(lineUserId, c){
   // 先找一批還有剩的堂數批次來扣（越快到期的優先扣）
   let batchId = null, batchRemainingBefore = null;
@@ -2392,6 +2440,11 @@ async function adminAddBooking(lineUserId){
     const uniqueDates = [...new Set(dateValues)];
     if(uniqueDates.length===0){ showToast('請至少選擇一個日期'); return; }
 
+    const capacityEntries = uniqueDates
+      .filter(dateVal => (tmpl.weekdays||[]).includes(weekdayLabelOf(dateVal)))
+      .map(dateVal => ({ classKey:`${isoToDateKey(dateVal)}_${tmpl.id}`, label:`${dateVal} ${tmpl.title}`, cap:tmpl.cap, addCount:1 }));
+    if(!(await checkCapacityBeforeBooking(capacityEntries))) return;
+
     let successCount = 0;
     const skipped = [];
     for(const dateVal of uniqueDates){
@@ -2417,8 +2470,10 @@ async function adminAddBooking(lineUserId){
     const override = dayOverrides.find(o=>o.id===id && o.type==='extra');
     if(!override){ showToast('找不到這堂特別課'); return; }
     const dateKey = isoToDateKey(override.date);
+    const classKey = `${dateKey}_extra_${override.id}`;
+    if(!(await checkCapacityBeforeBooking([{ classKey, label:`${override.date} ${override.title}`, cap:override.cap, addCount:1 }]))) return;
     const ok = await insertOneBooking(lineUserId, {
-      classKey: `${dateKey}_extra_${override.id}`, classTemplateId: null, title: override.title,
+      classKey, classTemplateId: null, title: override.title,
       classDate: dateKeyToLabel(override.date), classDateIso: override.date,
       time: override.time, teacher: override.teacher, cap: override.cap
     });
@@ -3319,6 +3374,15 @@ async function ensureDefaultRegQuestions(){
 function onNewRegQTypeChange(){
   const type = document.getElementById('newRegQType').value;
   document.getElementById('newRegQOptionsField').style.display = (type==='choice'||type==='multichoice') ? 'block' : 'none';
+  document.getElementById('newRegQRequiredField').style.display = type==='note' ? 'none' : 'flex';
+  const textInput = document.getElementById('newRegQText');
+  if(type==='note'){
+    document.getElementById('newRegQTextLabel').textContent = '說明文字內容';
+    textInput.placeholder = '例如：以下問題會用來幫你安排適合的課程，請放心填寫，資料只有老師看得到。';
+  } else {
+    document.getElementById('newRegQTextLabel').textContent = '問題文字';
+    textInput.placeholder = '例如：有沒有瑜珈經驗？';
+  }
 }
 function addNewRegQOption(){
   const input = document.getElementById('newRegQOptionInput');
@@ -3342,8 +3406,8 @@ function renderNewRegQOptions(){
 async function submitNewRegQuestion(){
   const text = document.getElementById('newRegQText').value.trim();
   const type = document.getElementById('newRegQType').value;
-  const required = document.getElementById('newRegQRequired').checked;
-  if(!text){ showToast('請輸入問題文字'); return; }
+  const required = type==='note' ? false : document.getElementById('newRegQRequired').checked;
+  if(!text){ showToast(type==='note' ? '請輸入說明文字內容' : '請輸入問題文字'); return; }
   if((type==='choice'||type==='multichoice') && newRegQOptions.length<2){ showToast('單選／多選題至少要有 2 個選項'); return; }
   const sortOrder = registrationQuestions.length>0 ? Math.max(...registrationQuestions.map(q=>q.sort_order)) + 1 : 0;
   const { error } = await db.from('registration_questions').insert({
@@ -3355,7 +3419,7 @@ async function submitNewRegQuestion(){
   newRegQOptions = [];
   await loadAdminState();
   render();
-  showToast('已新增問題');
+  showToast(type==='note' ? '已新增說明文字' : '已新增問題');
 }
 async function toggleRegQuestionActive(id){
   const q = registrationQuestions.find(x=>x.id===id);
@@ -3434,22 +3498,26 @@ function regQTypeLabel(q){
   if(q.type==='choice') return '單選：'+(q.options||[]).join('、');
   if(q.type==='multichoice') return '多選：'+(q.options||[]).join('、');
   if(q.type==='date') return '日期選擇';
+  if(q.type==='note') return '說明文字';
   return '簡答';
 }
 async function saveEditRegQuestion(id){
   const text = document.getElementById(`rqEditText-${id}`).value.trim();
   const type = document.getElementById(`rqEditType-${id}`).value;
-  if(!text){ showToast('問題文字不能空白'); return; }
+  if(!text){ showToast(type==='note' ? '說明文字內容不能空白' : '問題文字不能空白'); return; }
   if((type==='choice'||type==='multichoice') && editRegQOptions.length<2){ showToast('單選／多選題至少要有 2 個選項'); return; }
   const options = (type==='choice'||type==='multichoice') ? [...editRegQOptions] : [];
-  const { error } = await db.from('registration_questions').update({ question: text, type, options }).eq('id', id);
+  const required = type==='note' ? false : undefined;
+  const payload = { question: text, type, options };
+  if(required!==undefined) payload.required = required;
+  const { error } = await db.from('registration_questions').update(payload).eq('id', id);
   if(error){ showToast('更新失敗'); console.error(error); return; }
   const q = registrationQuestions.find(x=>x.id===id);
-  if(q){ q.question = text; q.type = type; q.options = options; }
+  if(q){ q.question = text; q.type = type; q.options = options; if(required!==undefined) q.required = required; }
   editingRegQuestionId = null;
   editRegQOptions = [];
   render();
-  showToast('已更新問題');
+  showToast(type==='note' ? '已更新說明文字' : '已更新問題');
 }
 
 async function toggleRegistrationShowName(){
@@ -3517,6 +3585,7 @@ function pageRegistration(){
               <option value="choice" ${q.type==='choice'?'selected':''}>單選（自己設定選項）</option>
               <option value="multichoice" ${q.type==='multichoice'?'selected':''}>多選（自己設定選項）</option>
               <option value="date" ${q.type==='date'?'selected':''}>日期選擇</option>
+              <option value="note" ${q.type==='note'?'selected':''}>說明文字（不是問題，只顯示一段文字）</option>
             </select>
           </div>
           <div class="field" id="rqEditOptionsField-${q.id}" style="display:${(q.type==='choice'||q.type==='multichoice')?'block':'none'};grid-column:1/-1;">
@@ -3538,14 +3607,14 @@ function pageRegistration(){
       <div class="q-row">
         <div class="q-order">
           <button onclick="moveRegQuestion('${q.id}',-1)" ${i===0?'disabled':''}>▲</button>
-          <button onclick="moveRegQuestion('${q.id}',1)" ${i===registrationQuestions.length-1?'disabled':''}>▼</button>
+          <button onclick="moveRegQuestion('${q.id}',1)" ${i===otherQuestions.length-1?'disabled':''}>▼</button>
         </div>
         <div class="q-main">
           <div class="q-text">${q.question}</div>
           <div class="q-meta" style="margin-top:6px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
             <button class="tag-btn ${q.type==='text'?'off':'on'}" onclick="startEditRegQuestion('${q.id}')" title="點一下可以修改題型">${regQTypeLabel(q)}</button>
             <button class="tag-btn ${q.active?'on':'off'}" onclick="toggleRegQuestionActive('${q.id}')">${q.active?'顯示中':'已隱藏'}</button>
-            <button class="tag-btn ${q.required?'warn':'off'}" onclick="toggleRegQuestionRequired('${q.id}')">${q.required?'必填':'選填'}</button>
+            ${q.type!=='note' ? `<button class="tag-btn ${q.required?'warn':'off'}" onclick="toggleRegQuestionRequired('${q.id}')">${q.required?'必填':'選填'}</button>` : ''}
             <div style="margin-left:auto;display:flex;gap:6px;">
               <button class="btn btn-ghost btn-sm" onclick="startEditRegQuestion('${q.id}')">編輯</button>
               <button class="btn btn-danger btn-sm" onclick="deleteRegQuestion('${q.id}')">刪除</button>
@@ -3580,13 +3649,14 @@ function pageRegistration(){
       <div class="panel-head"><h3>新增問題</h3></div>
       <div class="panel-body">
         <div class="form-grid">
-          <div class="field" style="grid-column:1/-1;"><label>問題文字</label><input id="newRegQText" placeholder="例如：有沒有瑜珈經驗？"></div>
+          <div class="field" style="grid-column:1/-1;"><label id="newRegQTextLabel">問題文字</label><input id="newRegQText" placeholder="例如：有沒有瑜珈經驗？"></div>
           <div class="field"><label>題型</label>
             <select id="newRegQType" onchange="onNewRegQTypeChange()">
               <option value="text">簡答（自由輸入文字）</option>
               <option value="choice">單選（自己設定選項）</option>
               <option value="multichoice">多選（自己設定選項）</option>
               <option value="date">日期選擇</option>
+              <option value="note">說明文字（不是問題，只顯示一段文字）</option>
             </select>
           </div>
           <div class="field" id="newRegQOptionsField" style="display:none;grid-column:1/-1;">
@@ -3597,7 +3667,7 @@ function pageRegistration(){
             </div>
             <div id="newRegQOptionsList" class="tag-chip-wrap"></div>
           </div>
-          <div class="field" style="grid-column:1/-1;flex-direction:row;align-items:center;gap:8px;">
+          <div class="field" id="newRegQRequiredField" style="grid-column:1/-1;flex-direction:row;align-items:center;gap:8px;">
             <input type="checkbox" id="newRegQRequired" style="width:16px;height:16px;">
             <label for="newRegQRequired" style="margin:0;">這一題設為必填</label>
           </div>
