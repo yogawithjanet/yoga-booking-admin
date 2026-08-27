@@ -160,6 +160,7 @@
   }
   .tag-chip .x{cursor:pointer;font-weight:700;opacity:.7;}
   .tag-chip .x:hover{opacity:1;}
+  .tag-manage-list{display:flex;flex-direction:column;gap:10px;}
   .tag-manage-item{position:relative;display:inline-block;}
   .tag-manage-item .tag-remove-x{
     position:absolute;top:-6px;right:-6px;width:18px;height:18px;border-radius:50%;
@@ -278,6 +279,31 @@
   }
   .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
 
+  /* ---- 自訂確認視窗（置中，取代原生 confirm()，可以自訂標題） ---- */
+  .modal-overlay{
+    position:fixed;inset:0;background:rgba(38,37,31,.45);display:flex;align-items:center;justify-content:center;
+    opacity:0;pointer-events:none;transition:opacity .2s ease;z-index:200;padding:20px;
+  }
+  .modal-overlay.show{opacity:1;pointer-events:auto;}
+  .modal-overlay .modal{
+    width:100%;max-width:380px;background:#fff;border-radius:16px;padding:22px 22px 20px;
+    transform:scale(.94);transition:transform .2s ease;box-shadow:0 12px 40px rgba(0,0,0,.25);
+  }
+  .modal-overlay.show .modal{transform:scale(1);}
+  .modal-overlay .modal h3{margin:0 0 8px;font-size:16px;}
+  .modal-overlay .modal p{margin:0 0 18px;font-size:13px;color:var(--muted);line-height:1.6;white-space:pre-wrap;}
+  .modal-overlay .modal-actions{display:flex;gap:10px;}
+  .modal-overlay .modal-actions button{flex:1;border:none;border-radius:10px;padding:11px;font-size:13.5px;font-weight:700;cursor:pointer;}
+  .modal-overlay .modal-actions .cancel{background:var(--paper);color:var(--ink);}
+  .modal-overlay .modal-actions .confirm{background:var(--danger);color:#fff;}
+
+  /* ---- 學員列表：到期日期輸入框，還沒選日期時顯示提示文字（date input 不支援 placeholder） ---- */
+  .date-placeholder-wrap{position:relative;display:inline-block;}
+  .date-placeholder-wrap .date-placeholder-text{
+    position:absolute;inset:0;display:flex;align-items:center;padding-left:7px;
+    background:var(--card);color:var(--muted);font-size:11px;pointer-events:none;border-radius:8px;
+  }
+
   /* ---- 登入畫面 ---- */
   #loginScreen{
     position:fixed;inset:0;background:var(--sage-dark);
@@ -344,10 +370,16 @@
 
     .panel-body.pad0{overflow-x:auto;-webkit-overflow-scrolling:touch;}
     .panel-body.pad0 table{min-width:560px;}
+    .panel-body.pad0 table.table-compact{min-width:0;}
+    .table-compact thead th{padding:8px 8px;}
+    .table-compact tbody td{padding:9px 8px;}
 
     .q-row{flex-wrap:wrap;}
     .q-actions{flex-wrap:wrap;row-gap:6px;}
     .row-actions{flex-wrap:wrap;justify-content:flex-start;}
+    .member-row-actions{display:none;} /* 學員列表的操作按鈕（查看/管理、+1、-1、到期日期、確認、刪除）手機版只留電腦版 */
+
+    .tag-manage-list{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}
 
     .mc-cell{min-height:60px;}
     .mc-month-label{font-size:14px;}
@@ -442,6 +474,17 @@
 </div>
 
 <div class="toast" id="toast"></div>
+
+<div class="modal-overlay" id="adminConfirmOverlay">
+  <div class="modal">
+    <h3 id="adminConfirmTitle">提醒 warning</h3>
+    <p id="adminConfirmBody"></p>
+    <div class="modal-actions">
+      <button class="cancel" onclick="resolveAdminConfirm(false)">取消</button>
+      <button class="confirm" onclick="resolveAdminConfirm(true)">確定</button>
+    </div>
+  </div>
+</div>
 
 <script>
 /* ============ Supabase 連線設定（跟前台用同一組，實際數值放在 config.js，不進版控） ============ */
@@ -1423,8 +1466,21 @@ async function addAvailableTag(){
   input.value = '';
   render();
 }
+let adminConfirmResolve = null;
+function showAdminConfirm(body, title){
+  document.getElementById('adminConfirmTitle').textContent = title || '提醒 warning';
+  document.getElementById('adminConfirmBody').textContent = body;
+  document.getElementById('adminConfirmOverlay').classList.add('show');
+  return new Promise(resolve => { adminConfirmResolve = resolve; });
+}
+function resolveAdminConfirm(result){
+  document.getElementById('adminConfirmOverlay').classList.remove('show');
+  if(adminConfirmResolve) adminConfirmResolve(result);
+  adminConfirmResolve = null;
+}
+
 async function removeAvailableTag(tag){
-  const ok = confirm(`確定刪除嗎？刪除後無法復原，同學的標籤也都會移除。`);
+  const ok = await showAdminConfirm('確定刪除嗎？刪除後無法復原，同學的標籤也都會移除。');
   if(!ok) return;
   const newTags = (data.store.available_tags||[]).filter(t=>t!==tag);
   const { error } = await db.from('store_settings').update({ available_tags:newTags }).eq('id', 1);
@@ -1570,13 +1626,16 @@ function pageMembers(){
       <td><b>${m.remaining_credits}</b> 堂</td>
       <td>${recentCount} 堂</td>
       <td>
-        <div class="row-actions" style="flex-wrap:wrap;justify-content:flex-end;">
+        <div class="row-actions member-row-actions" style="flex-wrap:wrap;justify-content:flex-end;">
           <button class="btn btn-ghost btn-sm" onclick="runCreditAction(()=>openMemberDetail('${m.line_user_id}'))">查看／管理</button>
           <button class="btn btn-ghost btn-sm" onclick="runCreditAction(()=>adjustMember('${m.line_user_id}', 1))">＋1</button>
           <button class="btn btn-ghost btn-sm" onclick="runCreditAction(()=>adjustMember('${m.line_user_id}', -1))">－1</button>
           <input type="number" id="setCredits-${m.line_user_id}" placeholder="輸入數字" style="width:70px;border:1px solid var(--line);border-radius:8px;padding:5px 8px;font-size:12.5px;">
-          <input type="date" id="setCreditsExpiry-${m.line_user_id}" title="增加堂數時的效期（留空＝永久有效），套用到「＋1」跟「設定」" style="width:128px;border:1px solid var(--line);border-radius:8px;padding:5px 6px;font-size:11.5px;">
-          <button class="btn btn-primary btn-sm" onclick="runCreditAction(()=>setMemberCredits('${m.line_user_id}'))">設定</button>
+          <div class="date-placeholder-wrap">
+            <input type="date" id="setCreditsExpiry-${m.line_user_id}" onchange="onSetCreditsExpiryChange(this)" title="增加堂數時的效期（留空＝永久有效），套用到「＋1」跟「確認」" style="width:128px;border:1px solid var(--line);border-radius:8px;padding:5px 6px;font-size:11.5px;">
+            <span class="date-placeholder-text">到期日期設定</span>
+          </div>
+          <button class="btn btn-primary btn-sm" onclick="runCreditAction(()=>setMemberCredits('${m.line_user_id}'))">確認</button>
           <button class="btn btn-danger btn-sm" onclick="deleteMember('${m.line_user_id}')">刪除</button>
         </div>
       </td>
@@ -1595,7 +1654,7 @@ function pageMembers(){
           <input type="text" id="newAvailableTagInput" placeholder="輸入新標籤" onkeydown="if(event.key==='Enter') addAvailableTag()">
           <button class="tag-add-btn" onclick="addAvailableTag()">＋</button>
         </div>
-        <div style="display:flex;flex-direction:column;gap:10px;">
+        <div class="tag-manage-list">
           ${availableTags.map(t=>{
             const isOpen = expandedColorTag === t;
             return `
@@ -1852,6 +1911,12 @@ async function deleteBatch(batchId, lineUserId){
   }
 }
 
+function onSetCreditsExpiryChange(input){
+  const overlay = input.nextElementSibling;
+  if(overlay && overlay.classList.contains('date-placeholder-text')){
+    overlay.style.display = input.value ? 'none' : 'flex';
+  }
+}
 async function setMemberCredits(lineUserId){
   const input = document.getElementById(`setCredits-${lineUserId}`);
   const val = Number(input.value);
@@ -3250,7 +3315,7 @@ function pageCashflow(){
       <div class="panel" style="display:flex;flex-direction:column;">
         <div class="panel-head"><h3>依學員排序的消費總額${hasFilter ? '（篩選區間）' : ''}</h3></div>
         <div class="panel-body pad0">
-          <table><thead><tr><th>#</th><th>學員</th><th>消費總額</th></tr></thead>
+          <table class="table-compact"><thead><tr><th>#</th><th>學員</th><th>消費總額</th></tr></thead>
           <tbody>${memberRanking || '<tr><td colspan="3" style="text-align:center;color:var(--muted);padding:20px;">尚無資料</td></tr>'}</tbody></table>
         </div>
         <div class="panel-body" style="margin-top:auto;display:flex;align-items:center;justify-content:center;gap:12px;border-top:1px solid var(--line);">
@@ -3581,6 +3646,20 @@ async function toggleRegistrationShowContact(){
   data.store.registration_show_contact = newVal;
   render();
 }
+async function toggleRegistrationNameRequired(){
+  const newVal = !(data.store.registration_name_required!==false);
+  const { error } = await db.from('store_settings').update({ registration_name_required: newVal }).eq('id', 1);
+  if(error){ showToast('更新失敗'); console.error(error); return; }
+  data.store.registration_name_required = newVal;
+  render();
+}
+async function toggleRegistrationContactRequired(){
+  const newVal = !(data.store.registration_contact_required!==false);
+  const { error } = await db.from('store_settings').update({ registration_contact_required: newVal }).eq('id', 1);
+  if(error){ showToast('更新失敗'); console.error(error); return; }
+  data.store.registration_contact_required = newVal;
+  render();
+}
 
 function buildRegFieldOrderControls(key, isFirst, isLast){
   return `
@@ -3598,6 +3677,7 @@ function buildFixedFieldRow(f, key, isFirst, isLast){
         <div class="q-meta" style="margin-top:6px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
           <span class="tag off">預設欄位</span>
           <button class="tag-btn ${f.shown?'on':'off'}" onclick="${f.toggleFn}()">${f.shown?'顯示中':'已隱藏'}</button>
+          <button class="tag-btn ${f.required?'warn':'off'}" onclick="${f.requiredToggleFn}()">${f.required?'必填':'選填'}</button>
         </div>
       </div>
     </div>`;
@@ -3611,6 +3691,7 @@ function buildPromotedDefaultRow(q, key, isFirst, isLast){
         <div class="q-meta" style="margin-top:6px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
           <span class="tag off">預設欄位</span>
           <button class="tag-btn ${q.active?'on':'off'}" onclick="toggleRegQuestionActive('${q.id}')">${q.active?'顯示中':'已隱藏'}</button>
+          <button class="tag-btn ${q.required?'warn':'off'}" onclick="toggleRegQuestionRequired('${q.id}')">${q.required?'必填':'選填'}</button>
         </div>
       </div>
     </div>`;
@@ -3671,8 +3752,8 @@ function pageRegistration(){
   const fieldOrder = computeRegFieldOrder();
   const allFieldRows = fieldOrder.map((key, i)=>{
     const isFirst = i===0, isLast = i===fieldOrder.length-1;
-    if(key==='name') return buildFixedFieldRow({ label:'姓名', shown: data.store.registration_show_name!==false, toggleFn:'toggleRegistrationShowName' }, key, isFirst, isLast);
-    if(key==='contact') return buildFixedFieldRow({ label:'e-mail', shown: data.store.registration_show_contact!==false, toggleFn:'toggleRegistrationShowContact' }, key, isFirst, isLast);
+    if(key==='name') return buildFixedFieldRow({ label:'姓名', shown: data.store.registration_show_name!==false, toggleFn:'toggleRegistrationShowName', required: data.store.registration_name_required!==false, requiredToggleFn:'toggleRegistrationNameRequired' }, key, isFirst, isLast);
+    if(key==='contact') return buildFixedFieldRow({ label:'e-mail', shown: data.store.registration_show_contact!==false, toggleFn:'toggleRegistrationShowContact', required: data.store.registration_contact_required!==false, requiredToggleFn:'toggleRegistrationContactRequired' }, key, isFirst, isLast);
     if(key.startsWith('q_')){
       const qid = key.slice(2);
       const q = registrationQuestions.find(x=>x.id===qid);
@@ -3762,8 +3843,8 @@ function registrantFieldDefs(){
     { key:'display_name', label:'學員（LINE 顯示名稱）' },
     { key:'registration_name', label:'姓名' }
   ];
-  // 每一題蒐集到的註冊問題答案都可以選擇顯示
-  registrationQuestions.forEach(q=>{
+  // 每一題蒐集到的註冊問題答案都可以選擇顯示（說明文字不是真正收集到的資料，不列入）
+  registrationQuestions.filter(q=>q.type!=='note').forEach(q=>{
     fields.push({ key:'q_'+q.id, label:q.question, qid:q.id });
   });
   fields.push({ key:'registration_contact', label:'e-mail' });
