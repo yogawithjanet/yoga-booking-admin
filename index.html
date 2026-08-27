@@ -46,12 +46,15 @@
     padding:16px 22px 6px;font-size:10.5px;font-weight:700;letter-spacing:1px;
     color:rgba(255,255,255,.45);text-transform:uppercase;
   }
+  .nav-item-row{display:flex;align-items:center;}
+  .nav-item-row .nav-item{flex:1;padding-right:8px;}
   .sidebar-collapse-toggle{
-    display:flex;align-items:center;gap:6px;margin:0 14px 14px;padding:7px 10px;border-radius:8px;
-    background:rgba(255,255,255,.08);color:rgba(255,255,255,.75);font-size:11.5px;cursor:pointer;
+    flex-shrink:0;width:20px;height:20px;border-radius:50%;margin-right:12px;
+    display:flex;align-items:center;justify-content:center;cursor:pointer;
+    background:var(--paper);color:var(--sage-dark);font-size:10px;box-shadow:0 1px 3px rgba(0,0,0,.18);
   }
-  .sidebar-collapse-toggle:hover{background:rgba(255,255,255,.16);color:#fff;}
-  .sidebar-collapse-toggle .collapse-ic{display:inline-block;transition:transform .2s ease;}
+  .sidebar-collapse-toggle:hover{background:#fff;}
+  .sidebar-collapse-toggle .collapse-ic{display:inline-block;transition:transform .2s ease;line-height:1;}
   @media (min-width:861px){
     .sidebar{transition:width .18s ease;}
     .sidebar.collapsed{width:64px;}
@@ -60,7 +63,9 @@
     .sidebar.collapsed .nav-group-title{display:none;}
     .sidebar.collapsed .nav-item{justify-content:center;padding:11px 0;}
     .sidebar.collapsed .nav-item .ic{width:auto;}
-    .sidebar.collapsed .sidebar-collapse-toggle{justify-content:center;margin:0 10px 14px;}
+    .sidebar.collapsed .nav-item-row{flex-direction:column;gap:8px;padding:6px 0 2px;}
+    .sidebar.collapsed .nav-item-row .nav-item{flex:none;width:100%;padding:8px 0;}
+    .sidebar.collapsed .sidebar-collapse-toggle{margin-right:0;}
     .sidebar.collapsed .sidebar-collapse-toggle .collapse-ic{transform:rotate(180deg);}
     .sidebar.collapsed .sidebar-bottom{text-align:center;padding:14px 0 0;}
   }
@@ -249,6 +254,10 @@
     background:var(--sage);color:#fff;border-radius:50%;width:20px;height:20px;font-size:11px;
   }
 
+  /* ---- 每日名單：日曆格子加上淺灰格線，並且比課程設定的日曆矮一點 ---- */
+  .roster-mini-calendar .mc-cell{min-height:66px;border-color:var(--line);}
+  .roster-mini-calendar .mc-cell.empty{border-color:transparent;}
+
   /* ---- 每日名單：日曆上的額滿標示（綠點=還有名額，紅點=已額滿） ---- */
   .roster-dots{display:flex;flex-wrap:wrap;gap:3px;justify-content:center;margin-top:4px;}
   .roster-dot{width:6px;height:6px;border-radius:50%;background:#3fa35e;flex-shrink:0;}
@@ -288,7 +297,6 @@
 
   .two-col-row{display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:stretch;}
   .roster-layout{display:grid;grid-template-columns:2fr 1fr;gap:20px;align-items:start;}
-  .classes-layout{display:grid;grid-template-columns:2fr 1fr;gap:20px;align-items:start;}
 
   /* ---- 手機版選單開關（桌面版預設隱藏） ---- */
   .mobile-topbar{display:none;}
@@ -311,6 +319,7 @@
       transition:background .22s ease;z-index:105;
     }
     .sidebar-backdrop.show{background:rgba(0,0,0,.4);pointer-events:auto;}
+    .sidebar-collapse-toggle{display:none;} /* 收合選單是電腦版才有意義的功能，手機版用漢堡選單開關就好 */
 
     .mobile-topbar{
       display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:40;
@@ -323,7 +332,6 @@
     .form-grid{grid-template-columns:1fr;}
     .two-col-row{grid-template-columns:1fr;gap:14px;}
     .roster-layout{grid-template-columns:1fr;gap:14px;}
-    .classes-layout{grid-template-columns:1fr;gap:14px;}
     .action-row{grid-template-columns:1fr;}
     .stat-cards{grid-template-columns:repeat(2,1fr);}
 
@@ -390,8 +398,11 @@
 <div id="app" style="display:none;">
   <div class="sidebar">
     <div class="brand" id="sidebarBrand">團課教室<span>後台管理系統</span></div>
-    <div class="sidebar-collapse-toggle" onclick="toggleSidebarCollapse()" title="收合／展開選單"><span class="collapse-ic" id="sidebarCollapseIcon">‹</span><span class="nav-label">收合選單</span></div>
-    <div class="nav-item active" data-page="overview"><span class="ic">📊</span><span class="nav-label">總覽與店家設定</span></div>
+    <div class="nav-item-row">
+      <div class="nav-item active" data-page="overview"><span class="ic">📊</span><span class="nav-label">總覽與店家設定</span></div>
+      <div class="sidebar-collapse-toggle" onclick="toggleSidebarCollapse()" title="收合／展開選單"><span class="collapse-ic" id="sidebarCollapseIcon">‹</span></div>
+    </div>
+    <div class="nav-item" data-page="announcement"><span class="ic">📢</span><span class="nav-label">公告推播</span></div>
 
     <div class="nav-group-title">學員相關</div>
     <div class="nav-item" data-page="members"><span class="ic">👥</span><span class="nav-label">學員管理</span></div>
@@ -619,22 +630,6 @@ function pageOverview(){
         </div>
       </div>
       <div class="add-bar"><button class="btn btn-primary" onclick="saveStore()">儲存設定</button></div>
-    </div>
-
-    <div class="panel">
-      <div class="panel-head"><h3>公告推播</h3></div>
-      <div class="panel-body">
-        <div class="desc" style="margin-bottom:14px;">設定後，學生打開 LINE 預約頁面時會立刻跳出這則公告（例如活動優惠、營業時間異動、停課公告）。關閉後就不會再跳出。</div>
-        <div class="settings-row" style="padding-top:0;">
-          <div><div class="label">啟用公告彈窗</div><div class="desc">開啟後，學生每次打開 app 都會看到這則公告，直到你關閉為止。</div></div>
-          <div class="toggle ${s.announcement_enabled?'on':''}" onclick="toggleAnnouncementEnabled()"><div class="knob"></div></div>
-        </div>
-        <div class="form-grid" style="margin-top:14px;">
-          <div class="field" style="grid-column:1/-1;"><label>公告標題</label><input id="annTitle" value="${s.announcement_title||''}" placeholder="例如：中秋連假停課通知"></div>
-          <div class="field" style="grid-column:1/-1;"><label>公告內容</label><textarea id="annContent" style="min-height:100px;" placeholder="例如：9/26（五）、9/27（六）停課一天，造成不便敬請見諒。">${s.announcement_content||''}</textarea></div>
-        </div>
-      </div>
-      <div class="add-bar"><button class="btn btn-primary" onclick="saveAnnouncement()">儲存並套用</button></div>
     </div>
 
     <div class="panel">
@@ -941,15 +936,13 @@ function pageClasses(){
     <div class="page-title">課程設定</div>
     <div class="page-sub">用左邊日曆快速調整單一天的課程內容，右邊是目前所有課程範本。</div>
 
-    <div class="classes-layout">
+    <div class="two-col-row">
     <div class="panel">
       <div class="panel-head"><h3>課程日曆</h3></div>
       <div class="panel-body">
         <div class="desc" style="margin-bottom:12px;">點日期查看那天的課程，可以直接「停開這天」或「只修改這天」（不影響其他星期的固定課表）。</div>
-        <div style="display:grid;grid-template-columns:1.7fr 1fr;gap:20px;align-items:start;">
-          <div>${buildClassesCalendarHTML()}</div>
-          <div style="min-height:120px;">${buildDayDetailHTML()}</div>
-        </div>
+        ${buildClassesCalendarHTML()}
+        <div style="min-height:60px;margin-top:16px;border-top:1px solid var(--line);padding-top:16px;">${buildDayDetailHTML()}</div>
       </div>
     </div>
 
@@ -1226,14 +1219,103 @@ async function toggleAnnouncementEnabled(){
   render();
   showToast(newVal ? '已啟用公告彈窗，學生下次打開 app 就會看到' : '已關閉公告彈窗');
 }
+
+/* ================= 公告推播 ================= */
+// pendingAnnouncementImage: undefined＝這次沒有異動圖片；null＝使用者按了「移除圖片」；字串＝剛選好、還沒存檔的新圖片（base64）
+let pendingAnnouncementImage = undefined;
+function onAnnouncementImageChange(e){
+  const file = e.target.files[0];
+  if(!file) return;
+  if(file.size > 800*1024){
+    showToast('圖片太大了，請用小於 800KB 的圖片（可以先用手機修圖或線上工具壓縮）');
+    e.target.value = '';
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = () => {
+    pendingAnnouncementImage = reader.result;
+    rerenderAnnouncementPageKeepingDraft();
+    showToast('圖片已選好，記得按「儲存並套用」才會真的更新');
+  };
+  reader.readAsDataURL(file);
+}
+function removeAnnouncementImage(){
+  pendingAnnouncementImage = null;
+  rerenderAnnouncementPageKeepingDraft();
+}
+function rerenderAnnouncementPageKeepingDraft(){
+  // 換圖片／移除圖片都會觸發整頁重繪，先把還沒存檔的標題／內容留住，重繪後再填回去
+  const titleEl = document.getElementById('annTitle');
+  const contentEl = document.getElementById('annContent');
+  const titleVal = titleEl ? titleEl.value : '';
+  const contentVal = contentEl ? contentEl.value : '';
+  render();
+  const newTitleEl = document.getElementById('annTitle');
+  const newContentEl = document.getElementById('annContent');
+  if(newTitleEl) newTitleEl.value = titleVal;
+  if(newContentEl) newContentEl.value = contentVal;
+}
 async function saveAnnouncement(){
   const title = document.getElementById('annTitle').value.trim();
   const content = document.getElementById('annContent').value.trim();
-  const { error } = await db.from('store_settings').update({ announcement_title: title, announcement_content: content }).eq('id', 1);
+  const payload = { announcement_title: title, announcement_content: content };
+  if(pendingAnnouncementImage !== undefined) payload.announcement_image = pendingAnnouncementImage;
+  const { error } = await db.from('store_settings').update(payload).eq('id', 1);
   if(error){ showToast('儲存失敗'); console.error(error); return; }
   data.store.announcement_title = title;
   data.store.announcement_content = content;
+  if(pendingAnnouncementImage !== undefined) data.store.announcement_image = pendingAnnouncementImage;
+  pendingAnnouncementImage = undefined;
+  render();
   showToast('已儲存公告內容');
+}
+
+function pageAnnouncement(){
+  const s = data.store;
+  const previewImage = pendingAnnouncementImage !== undefined ? pendingAnnouncementImage : s.announcement_image;
+  return `
+    <div class="page-title">公告推播</div>
+    <div class="page-sub">設定後，學生打開 LINE 預約頁面時會立刻在畫面正中間跳出這則公告（例如活動優惠、營業時間異動、停課公告）。關閉後就不會再跳出。</div>
+
+    <div class="two-col-row">
+    <div class="panel">
+      <div class="panel-head"><h3>公告內容</h3></div>
+      <div class="panel-body">
+        <div class="settings-row" style="padding-top:0;">
+          <div><div class="label">啟用公告彈窗</div><div class="desc">開啟後，學生每次打開 app 都會看到這則公告，直到你關閉為止。</div></div>
+          <div class="toggle ${s.announcement_enabled?'on':''}" onclick="toggleAnnouncementEnabled()"><div class="knob"></div></div>
+        </div>
+        <div class="form-grid" style="margin-top:14px;">
+          <div class="field" style="grid-column:1/-1;"><label>公告標題</label><input id="annTitle" value="${s.announcement_title||''}" placeholder="例如：中秋連假停課通知"></div>
+          <div class="field" style="grid-column:1/-1;"><label>公告內容</label><textarea id="annContent" style="min-height:100px;" placeholder="例如：9/26（五）、9/27（六）停課一天，造成不便敬請見諒。">${s.announcement_content||''}</textarea></div>
+          <div class="field" style="grid-column:1/-1;">
+            <label>公告圖片（選填）</label>
+            <input type="file" id="annImageInput" accept="image/*" onchange="onAnnouncementImageChange(event)">
+            <div class="desc" style="margin-top:4px;">建議上傳寬度小於 1000px、檔案小於 800KB 的圖片，載入才不會太慢。</div>
+            ${previewImage ? `
+            <div style="margin-top:10px;">
+              <img src="${previewImage}" style="max-width:220px;max-height:220px;border-radius:10px;border:1px solid var(--line);display:block;">
+              <button class="btn btn-danger btn-sm" onclick="removeAnnouncementImage()" style="margin-top:8px;">移除圖片</button>
+            </div>` : ''}
+          </div>
+        </div>
+      </div>
+      <div class="add-bar"><button class="btn btn-primary" onclick="saveAnnouncement()">儲存並套用</button></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h3>預覽（學生會看到的樣子）</h3></div>
+      <div class="panel-body" style="display:flex;justify-content:center;background:rgba(0,0,0,.04);">
+        <div style="width:280px;background:#fff;border-radius:20px;padding:20px;box-shadow:0 8px 30px rgba(0,0,0,.15);position:relative;margin:14px 0;">
+          <div style="position:absolute;top:10px;right:10px;width:24px;height:24px;border-radius:50%;background:rgba(0,0,0,.06);display:flex;align-items:center;justify-content:center;font-size:12px;">✕</div>
+          ${previewImage ? `<img src="${previewImage}" style="width:100%;border-radius:12px;margin-bottom:14px;display:block;">` : ''}
+          <h3 style="margin:0 0 8px;font-size:16px;">${s.announcement_title || '（尚未設定標題）'}</h3>
+          <p style="margin:0 0 16px;font-size:13px;color:var(--muted);white-space:pre-wrap;line-height:1.6;">${s.announcement_content || '（尚未設定內容）'}</p>
+          <div style="background:var(--sage);color:#fff;text-align:center;padding:11px;border-radius:12px;font-weight:700;font-size:13px;">我知道了</div>
+        </div>
+      </div>
+    </div>
+    </div>`;
 }
 async function saveStore(){
   const name = document.getElementById('stName').value.trim();
@@ -2486,7 +2568,7 @@ function buildRosterCalendarHTML(){
   }
 
   return `
-    <div class="mini-calendar">
+    <div class="mini-calendar roster-mini-calendar">
       <div class="mc-header">
         <button class="mc-nav" onclick="changeRosterCalendarMonth(-1)">‹</button>
         <span class="mc-month-label">${year} 年 ${month} 月</span>
@@ -2698,11 +2780,31 @@ let cashflowFilterEnd = '';
 let editingTransactionId = null;
 let cashflowRankingPage = 1;
 const CASHFLOW_RANKING_PAGE_SIZE = 10;
+let cashflowCreditBatches = []; // 用來算「已實現／遞延收入」：每一批已收金額，依「已使用堂數／總堂數」拆算
 
 async function loadCashflowData(){
-  const { data, error } = await db.from('transactions')
-    .select('*').order('occurred_at', { ascending:false });
-  cashflowRecords = (!error && data) ? data : [];
+  const [txRes, batchRes] = await Promise.all([
+    db.from('transactions').select('*').order('occurred_at', { ascending:false }),
+    db.from('credit_batches').select('amount, remaining, amount_paid').not('amount_paid', 'is', null)
+  ]);
+  cashflowRecords = (!txRes.error && txRes.data) ? txRes.data : [];
+  cashflowCreditBatches = (!batchRes.error && batchRes.data) ? batchRes.data : [];
+}
+
+// 收入實現狀況（遞延收入概念）：學生預繳的課費，錢雖然已經收到，
+// 但只有「已經上過的部分」才算真的賺到；還沒上完的部分理論上還有退費風險，
+// 屬於「遞延收入／未實現」。這裡用每批堂數「已使用／總堂數」的比例，
+// 反推該批實收金額裡有多少算已實現、多少算遞延——不需要老師自己手動分類判斷。
+function computeRevenueRecognition(){
+  let earned = 0, deferred = 0;
+  cashflowCreditBatches.forEach(b=>{
+    const paid = Number(b.amount_paid);
+    if(!paid || !b.amount) return;
+    const usedFraction = Math.min(1, Math.max(0, (b.amount - b.remaining) / b.amount));
+    earned += paid * usedFraction;
+    deferred += paid * (1 - usedFraction);
+  });
+  return { earned, deferred, total: earned + deferred };
 }
 async function loadCashflowAndRender(){
   await loadCashflowData();
@@ -2906,7 +3008,7 @@ function pageCashflow(){
             </div>
             <div class="field" style="width:auto;"><label>日期</label><input id="txEditDate-${r.id}" type="date" value="${r.occurred_at}"></div>
             <div class="field" style="width:auto;"><label>金額</label><input id="txEditAmount-${r.id}" type="number" min="0" value="${r.amount}" style="width:100px;"></div>
-            <div class="field" style="width:auto;" id="txEditCostTypeField-${r.id}" ${r.type!=='expense'?'style="display:none;width:auto;"':''}>
+            <div class="field" id="txEditCostTypeField-${r.id}" style="width:auto;${r.type!=='expense'?'display:none;':''}">
               <label>成本類型</label>
               <select id="txEditCostType-${r.id}">
                 <option value="" ${!r.cost_type?'selected':''}>不分類</option>
@@ -2963,6 +3065,31 @@ function pageCashflow(){
     <div class="panel">
       <div class="panel-head"><h3>近 6 個月收支趨勢</h3></div>
       <div class="panel-body">${buildCashflowTrendChart(cashflowRecords)}</div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h3>收入實現狀況</h3></div>
+      <div class="panel-body">
+        <div class="desc" style="margin-bottom:12px;">
+          這裡是財務上「遞延收入」的概念：學生預繳的課費，錢雖然已經收到，但只有<b>已經實際上完的部分</b>才算真的賺到、可以放心運用；還沒上完的部分，理論上學生還是有可能要求退費，建議先當作「還欠學生的服務」看待、保留應對空間。
+          這個數字是系統依照每一批堂數「已使用 / 總堂數」的比例自動反推的，不需要自己手動分類。這是<b>目前為止的即時快照</b>，跟上面收支趨勢用的日期篩選無關。
+        </div>
+        ${(() => {
+          const rr = computeRevenueRecognition();
+          if(rr.total<=0) return '<div style="color:var(--muted);font-size:12.5px;">目前還沒有可以計算的堂數收款紀錄（要在「新增堂數」時有填實收金額才會列入）</div>';
+          const earnedPct = Math.round(rr.earned/rr.total*100);
+          const deferredPct = 100 - earnedPct;
+          return `
+          <div style="display:flex;height:26px;border-radius:8px;overflow:hidden;margin-bottom:10px;">
+            <div style="width:${earnedPct}%;background:var(--sage);" title="已實現 NT$ ${Math.round(rr.earned).toLocaleString()}"></div>
+            <div style="width:${deferredPct}%;background:var(--clay);" title="遞延／未實現 NT$ ${Math.round(rr.deferred).toLocaleString()}"></div>
+          </div>
+          <div style="display:flex;gap:18px;flex-wrap:wrap;font-size:12.5px;">
+            <span>🟢 已實現（已上完的部分）：NT$ ${Math.round(rr.earned).toLocaleString()}（${earnedPct}%）</span>
+            <span>🟠 遞延／未實現（尚未上完，有潛在退費風險）：NT$ ${Math.round(rr.deferred).toLocaleString()}（${deferredPct}%）</span>
+          </div>`;
+        })()}
+      </div>
     </div>
 
     <div class="panel">
@@ -3467,7 +3594,7 @@ function pageRegistrants(){
     </div>`;
 }
 
-const PAGES = {overview:pageOverview, cashflow:pageCashflow, classes:pageClasses, teachers:pageTeachers, members:pageMembers, roster:pageRoster, teacherlog:pageTeacherLog, popularity:pagePopularity, registration:pageRegistration, registrants:pageRegistrants};
+const PAGES = {overview:pageOverview, announcement:pageAnnouncement, cashflow:pageCashflow, classes:pageClasses, teachers:pageTeachers, members:pageMembers, roster:pageRoster, teacherlog:pageTeacherLog, popularity:pagePopularity, registration:pageRegistration, registrants:pageRegistrants};
 
 function render(){
   document.getElementById('sidebarBrand').innerHTML = data.store.name + '<span>後台管理系統</span>';
@@ -3506,6 +3633,7 @@ async function navigateToPage(page){
   localStorage.setItem(CURRENT_PAGE_KEY, page); // 記住目前頁面，重新整理後可以回到同一頁
   selectedMemberId = null; memberBookings = [];
   editingClassId = null;
+  if(page==='announcement'){ pendingAnnouncementImage = undefined; }
   if(page==='classes'){ await loadDayOverrides(); }
   if(page==='members'){ await loadMemberStats(); await loadDayOverrides(); }
   if(page==='roster'){ await loadDayOverrides(); await Promise.all([loadRoster(), loadRosterMonthCounts()]); }
