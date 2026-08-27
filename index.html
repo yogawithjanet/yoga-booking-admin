@@ -24,7 +24,7 @@
   }
   *{box-sizing:border-box;}
   body{margin:0;background:var(--paper);color:var(--ink);}
-  #app{display:flex;min-height:100vh;}
+  #app{display:flex;min-height:100vh;position:relative;}
 
   /* ---- Sidebar ---- */
   .sidebar{
@@ -46,15 +46,17 @@
     padding:16px 22px 6px;font-size:10.5px;font-weight:700;letter-spacing:1px;
     color:rgba(255,255,255,.45);text-transform:uppercase;
   }
-  .nav-item-row{display:flex;align-items:center;}
-  .nav-item-row .nav-item{flex:1;padding-right:8px;}
   .sidebar-collapse-toggle{
-    flex-shrink:0;width:20px;height:20px;border-radius:50%;margin-right:12px;
+    position:absolute;top:119px;left:220px;width:16px;height:54px;
+    border-radius:10px 0 0 10px;
+    background:var(--paper);color:var(--sage-dark);
+    border:1px solid var(--line);border-left:none;
     display:flex;align-items:center;justify-content:center;cursor:pointer;
-    background:var(--paper);color:var(--sage-dark);font-size:10px;box-shadow:0 1px 3px rgba(0,0,0,.18);
+    box-shadow:2px 2px 8px rgba(0,0,0,.2);
+    transition:left .18s ease;z-index:15;
   }
-  .sidebar-collapse-toggle:hover{background:#fff;}
-  .sidebar-collapse-toggle .collapse-ic{display:inline-block;transition:transform .2s ease;line-height:1;}
+  .sidebar-collapse-toggle:hover{background:#fff;color:var(--sage);}
+  .sidebar-collapse-toggle .collapse-ic{display:flex;transition:transform .2s ease;line-height:1;}
   @media (min-width:861px){
     .sidebar{transition:width .18s ease;}
     .sidebar.collapsed{width:64px;}
@@ -63,11 +65,9 @@
     .sidebar.collapsed .nav-group-title{display:none;}
     .sidebar.collapsed .nav-item{justify-content:center;padding:11px 0;}
     .sidebar.collapsed .nav-item .ic{width:auto;}
-    .sidebar.collapsed .nav-item-row{flex-direction:column;gap:8px;padding:6px 0 2px;}
-    .sidebar.collapsed .nav-item-row .nav-item{flex:none;width:100%;padding:8px 0;}
-    .sidebar.collapsed .sidebar-collapse-toggle{margin-right:0;}
-    .sidebar.collapsed .sidebar-collapse-toggle .collapse-ic{transform:rotate(180deg);}
     .sidebar.collapsed .sidebar-bottom{text-align:center;padding:14px 0 0;}
+    .sidebar.collapsed ~ .sidebar-collapse-toggle{left:64px;top:16px;}
+    .sidebar.collapsed ~ .sidebar-collapse-toggle .collapse-ic{transform:rotate(180deg);}
   }
 
   /* ---- Main ---- */
@@ -229,12 +229,12 @@
   .mc-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;}
   .mc-month-label{font-weight:700;font-size:16px;}
   .mc-nav{border:none;background:var(--sage-light);color:var(--sage-dark);width:28px;height:28px;border-radius:50%;font-size:16px;cursor:pointer;}
-  .mc-weekdays{display:grid;grid-template-columns:repeat(7,1fr);text-align:center;font-size:11.5px;color:var(--muted);margin-bottom:6px;font-weight:600;}
+  .mc-weekdays{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;text-align:center;font-size:11.5px;color:var(--muted);margin-bottom:6px;font-weight:600;}
   .mc-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;}
   .mc-cell{
-    min-height:88px;display:flex;flex-direction:column;align-items:stretch;
+    min-height:88px;min-width:0;display:flex;flex-direction:column;align-items:stretch;
     border-radius:9px;cursor:pointer;font-size:12px;color:var(--ink);
-    border:1px solid transparent;padding:4px;
+    border:1px solid transparent;padding:4px;overflow:hidden;
   }
   .mc-cell:not(.empty):hover{background:var(--paper);}
   .mc-cell.empty{cursor:default;}
@@ -258,10 +258,10 @@
   .roster-mini-calendar .mc-cell{min-height:66px;border-color:var(--line);}
   .roster-mini-calendar .mc-cell.empty{border-color:transparent;}
 
-  /* ---- 每日名單：日曆上的額滿標示（綠點=還有名額，紅點=已額滿） ---- */
+  /* ---- 每日名單：日曆上的額滿標示（藍點=還有名額，橘點=已額滿；特意不用紅綠配色，避免色盲使用者分不清楚） ---- */
   .roster-dots{display:flex;flex-wrap:wrap;gap:3px;justify-content:center;margin-top:4px;}
-  .roster-dot{width:6px;height:6px;border-radius:50%;background:#3fa35e;flex-shrink:0;}
-  .roster-dot.full{background:#d1503a;}
+  .roster-dot{width:6px;height:6px;border-radius:50%;background:#0072b2;flex-shrink:0;}
+  .roster-dot.full{background:#e69f00;}
   .roster-legend{display:flex;align-items:center;gap:6px;justify-content:center;padding-top:12px;margin-top:8px;border-top:1px solid var(--line);font-size:11.5px;color:var(--muted);}
   .roster-legend .roster-dot{margin-left:10px;}
   .roster-legend .roster-dot:first-child{margin-left:0;}
@@ -398,10 +398,7 @@
 <div id="app" style="display:none;">
   <div class="sidebar">
     <div class="brand" id="sidebarBrand">團課教室<span>後台管理系統</span></div>
-    <div class="nav-item-row">
-      <div class="nav-item active" data-page="overview"><span class="ic">📊</span><span class="nav-label">總覽與店家設定</span></div>
-      <div class="sidebar-collapse-toggle" onclick="toggleSidebarCollapse()" title="收合／展開選單"><span class="collapse-ic" id="sidebarCollapseIcon">‹</span></div>
-    </div>
+    <div class="nav-item active" data-page="overview"><span class="ic">📊</span><span class="nav-label">總覽與店家設定</span></div>
     <div class="nav-item" data-page="announcement"><span class="ic">📢</span><span class="nav-label">公告推播</span></div>
 
     <div class="nav-group-title">學員相關</div>
@@ -420,6 +417,12 @@
 
     <div class="nav-item" data-page="cashflow" style="margin-top:14px;border-top:1px solid rgba(255,255,255,.12);padding-top:15px;"><span class="ic">💰</span><span class="nav-label">金流管理</span></div>
     <div class="sidebar-bottom"><span class="logout-link" onclick="logout()">🚪 <span class="nav-label">登出</span></span></div>
+  </div>
+
+  <div class="sidebar-collapse-toggle" onclick="toggleSidebarCollapse()" title="收合／展開選單">
+    <span class="collapse-ic" id="sidebarCollapseIcon">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M15 5l-7 7 7 7" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </span>
   </div>
 
   <div class="sidebar-backdrop" id="sidebarBackdrop" onclick="closeMobileNav()"></div>
@@ -489,7 +492,7 @@ let memberPaymentFilterStart = ''; // 消費紀錄的日期篩選（開始）
 let memberPaymentFilterEnd = '';   // 消費紀錄的日期篩選（結束）
 let editingBatchId = null;   // 目前正在編輯的堂數批次 id
 let memberSearchQuery = '';
-let memberSortBy = 'default'; // default | credits_desc | credits_asc | name
+let memberSortBy = 'tag_asc'; // 預設用標籤分類排序，方便同標籤的學員排在一起
 let memberStatsCounts = {};   // line_user_id -> 指定區間內的已預約堂數
 let statsMonths = 2;
 /* ---- 標籤配色：可以手動選 10 種顏色其中一種，沒選過的話先用自動配色顯示 ---- */
@@ -2485,7 +2488,7 @@ let rosterDate = new Date().toISOString().slice(0,10);
 let rosterData = [];
 const rosterTodayNow = new Date();
 let rosterCalendarView = { year: rosterTodayNow.getFullYear(), month: rosterTodayNow.getMonth()+1 };
-let rosterMonthCounts = {}; // class_key -> 這個月的有效預約人數，用來判斷額滿（畫紅點）
+let rosterMonthCounts = {}; // class_key -> 這個月的有效預約人數，用來判斷額滿（畫橘點）
 
 async function loadRoster(){
   const { data: rows, error } = await db.from('bookings')
@@ -2602,7 +2605,7 @@ function pageRoster(){
 
   return `
     <div class="page-title">每日名單</div>
-    <div class="page-sub">點日曆上的日期查看當天每堂課有哪些學員預約。日曆上的綠點代表還有名額、紅點代表已經額滿。</div>
+    <div class="page-sub">點日曆上的日期查看當天每堂課有哪些學員預約。日曆上的藍點代表還有名額、橘點代表已經額滿（特意用藍橘配色，色盲使用者也能清楚分辨）。</div>
     <div class="roster-layout">
       <div class="panel">
         <div class="panel-body">
@@ -2780,31 +2783,20 @@ let cashflowFilterEnd = '';
 let editingTransactionId = null;
 let cashflowRankingPage = 1;
 const CASHFLOW_RANKING_PAGE_SIZE = 10;
-let cashflowCreditBatches = []; // 用來算「已實現／遞延收入」：每一批已收金額，依「已使用堂數／總堂數」拆算
-
-async function loadCashflowData(){
-  const [txRes, batchRes] = await Promise.all([
-    db.from('transactions').select('*').order('occurred_at', { ascending:false }),
-    db.from('credit_batches').select('amount, remaining, amount_paid').not('amount_paid', 'is', null)
-  ]);
-  cashflowRecords = (!txRes.error && txRes.data) ? txRes.data : [];
-  cashflowCreditBatches = (!batchRes.error && batchRes.data) ? batchRes.data : [];
+let cashflowTrendMonths = 6;
+function setCashflowTrendMonths(months){
+  cashflowTrendMonths = Number(months);
+  render();
 }
-
-// 收入實現狀況（遞延收入概念）：學生預繳的課費，錢雖然已經收到，
-// 但只有「已經上過的部分」才算真的賺到；還沒上完的部分理論上還有退費風險，
-// 屬於「遞延收入／未實現」。這裡用每批堂數「已使用／總堂數」的比例，
-// 反推該批實收金額裡有多少算已實現、多少算遞延——不需要老師自己手動分類判斷。
-function computeRevenueRecognition(){
-  let earned = 0, deferred = 0;
-  cashflowCreditBatches.forEach(b=>{
-    const paid = Number(b.amount_paid);
-    if(!paid || !b.amount) return;
-    const usedFraction = Math.min(1, Math.max(0, (b.amount - b.remaining) / b.amount));
-    earned += paid * usedFraction;
-    deferred += paid * (1 - usedFraction);
-  });
-  return { earned, deferred, total: earned + deferred };
+let costStructureExplainOpen = false;
+function toggleCostStructureExplain(){
+  costStructureExplainOpen = !costStructureExplainOpen;
+  render();
+}
+async function loadCashflowData(){
+  const { data, error } = await db.from('transactions')
+    .select('*').order('occurred_at', { ascending:false });
+  cashflowRecords = (!error && data) ? data : [];
 }
 async function loadCashflowAndRender(){
   await loadCashflowData();
@@ -2909,12 +2901,13 @@ async function deleteTransactionRow(id){
 }
 
 // 最近 6 個月的收入／支出／淨利折線圖，用純 SVG 手繪（不依賴外部圖表套件）
-function buildCashflowTrendChart(records){
+function buildCashflowTrendChart(records, monthCount){
+  monthCount = monthCount || 6;
   const now = new Date();
   const months = [];
-  for(let i=5;i>=0;i--){
+  for(let i=monthCount-1;i>=0;i--){
     const d = new Date(now.getFullYear(), now.getMonth()-i, 1);
-    months.push({ key:`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`, label:`${d.getMonth()+1}月` });
+    months.push({ key:`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`, label: monthCount>12 ? `${String(d.getFullYear()).slice(2)}/${d.getMonth()+1}` : `${d.getMonth()+1}月` });
   }
   const monthlyStats = months.map(m=>{
     const recs = records.filter(r=>r.occurred_at.startsWith(m.key));
@@ -2942,7 +2935,11 @@ function buildCashflowTrendChart(records){
     return `<line x1="${padL}" y1="${y.toFixed(1)}" x2="${W-padR}" y2="${y.toFixed(1)}" stroke="var(--line)" stroke-width="1"/>
       <text x="${padL-8}" y="${(y+3.5).toFixed(1)}" font-size="10" fill="var(--muted)" text-anchor="end">${Math.round(v/1000)}k</text>`;
   }).join('');
-  const xLabels = monthlyStats.map((m,i)=>`<text x="${xAt(i).toFixed(1)}" y="${H-8}" font-size="11" fill="var(--muted)" text-anchor="middle">${m.label}</text>`).join('');
+  const labelStep = monthCount > 12 ? Math.ceil(monthCount/12) : 1; // 月數太多的話跳著顯示，避免標籤擠在一起
+  const xLabels = monthlyStats.map((m,i)=>{
+    if(i % labelStep !== 0 && i !== monthlyStats.length-1) return '';
+    return `<text x="${xAt(i).toFixed(1)}" y="${H-8}" font-size="11" fill="var(--muted)" text-anchor="middle">${m.label}</text>`;
+  }).join('');
   const dotsFor = (key, color) => monthlyStats.map((m,i)=>
     `<circle cx="${xAt(i).toFixed(1)}" cy="${yAt(m[key]).toFixed(1)}" r="3.5" fill="${color}"><title>${m.label}${key==='income'?'收入':key==='expense'?'支出':'淨利'}：NT$ ${m[key].toLocaleString()}</title></circle>`
   ).join('');
@@ -2979,6 +2976,11 @@ function pageCashflow(){
   const thisMonthRecords = cashflowRecords.filter(r => r.occurred_at.startsWith(thisMonthPrefix));
   const thisMonthIncome = sumByType(thisMonthRecords, 'income');
   const thisMonthExpense = sumByType(thisMonthRecords, 'expense');
+
+  const thisYearPrefix = `${now.getFullYear()}-`;
+  const thisYearRecords = cashflowRecords.filter(r => r.occurred_at.startsWith(thisYearPrefix));
+  const thisYearIncome = sumByType(thisYearRecords, 'income');
+  const thisYearExpense = sumByType(thisYearRecords, 'expense');
 
   const filtered = cashflowRecords.filter(r=>{
     if(cashflowFilterStart && r.occurred_at < cashflowFilterStart) return false;
@@ -3059,43 +3061,28 @@ function pageCashflow(){
       <div class="stat-card"><div class="num">NT$ ${thisMonthIncome.toLocaleString()}</div><div class="lbl">本月收入</div></div>
       <div class="stat-card"><div class="num">NT$ ${thisMonthExpense.toLocaleString()}</div><div class="lbl">本月支出</div></div>
       <div class="stat-card"><div class="num">NT$ ${(thisMonthIncome-thisMonthExpense).toLocaleString()}</div><div class="lbl">本月淨利</div></div>
-      <div class="stat-card"><div class="num">NT$ ${(filteredIncome-filteredExpense).toLocaleString()}</div><div class="lbl">${hasFilter ? '篩選區間淨利' : '全部總淨利'}</div></div>
+      <div class="stat-card"><div class="num">NT$ ${(hasFilter ? (filteredIncome-filteredExpense) : (thisYearIncome-thisYearExpense)).toLocaleString()}</div><div class="lbl">${hasFilter ? '篩選區間淨利' : '今年度全部總淨利'}</div></div>
     </div>
 
+    <div class="two-col-row">
     <div class="panel">
-      <div class="panel-head"><h3>近 6 個月收支趨勢</h3></div>
-      <div class="panel-body">${buildCashflowTrendChart(cashflowRecords)}</div>
-    </div>
-
-    <div class="panel">
-      <div class="panel-head"><h3>收入實現狀況</h3></div>
-      <div class="panel-body">
-        <div class="desc" style="margin-bottom:12px;">
-          這裡是財務上「遞延收入」的概念：學生預繳的課費，錢雖然已經收到，但只有<b>已經實際上完的部分</b>才算真的賺到、可以放心運用；還沒上完的部分，理論上學生還是有可能要求退費，建議先當作「還欠學生的服務」看待、保留應對空間。
-          這個數字是系統依照每一批堂數「已使用 / 總堂數」的比例自動反推的，不需要自己手動分類。這是<b>目前為止的即時快照</b>，跟上面收支趨勢用的日期篩選無關。
-        </div>
-        ${(() => {
-          const rr = computeRevenueRecognition();
-          if(rr.total<=0) return '<div style="color:var(--muted);font-size:12.5px;">目前還沒有可以計算的堂數收款紀錄（要在「新增堂數」時有填實收金額才會列入）</div>';
-          const earnedPct = Math.round(rr.earned/rr.total*100);
-          const deferredPct = 100 - earnedPct;
-          return `
-          <div style="display:flex;height:26px;border-radius:8px;overflow:hidden;margin-bottom:10px;">
-            <div style="width:${earnedPct}%;background:var(--sage);" title="已實現 NT$ ${Math.round(rr.earned).toLocaleString()}"></div>
-            <div style="width:${deferredPct}%;background:var(--clay);" title="遞延／未實現 NT$ ${Math.round(rr.deferred).toLocaleString()}"></div>
-          </div>
-          <div style="display:flex;gap:18px;flex-wrap:wrap;font-size:12.5px;">
-            <span>🟢 已實現（已上完的部分）：NT$ ${Math.round(rr.earned).toLocaleString()}（${earnedPct}%）</span>
-            <span>🟠 遞延／未實現（尚未上完，有潛在退費風險）：NT$ ${Math.round(rr.deferred).toLocaleString()}（${deferredPct}%）</span>
-          </div>`;
-        })()}
+      <div class="panel-head">
+        <h3>收支趨勢</h3>
+        <select onchange="setCashflowTrendMonths(this.value)" style="border:1px solid var(--line);border-radius:8px;padding:5px 9px;font-size:12px;">
+          <option value="3" ${cashflowTrendMonths===3?'selected':''}>近 3 個月</option>
+          <option value="6" ${cashflowTrendMonths===6?'selected':''}>近 6 個月</option>
+          <option value="12" ${cashflowTrendMonths===12?'selected':''}>近 12 個月</option>
+          <option value="24" ${cashflowTrendMonths===24?'selected':''}>近 24 個月</option>
+        </select>
       </div>
+      <div class="panel-body">${buildCashflowTrendChart(cashflowRecords, cashflowTrendMonths)}</div>
     </div>
 
     <div class="panel">
       <div class="panel-head"><h3>成本結構${hasFilter ? '（篩選區間）' : '（全部）'}</h3></div>
       <div class="panel-body">
-        <div class="desc" style="margin-bottom:12px;">固定成本＝不管有沒有開課都要付的費用（例如場地租金、保險、月費訂閱）；變動成本＝隨開課量變動的費用（例如老師鐘點費、消耗品、單堂場地費）。掌握成本結構可以幫助你抓出「至少要賺多少才打平」的損益兩平點——固定成本佔比越高，代表開課量下滑時的風險越大。</div>
+        <button class="btn btn-ghost btn-sm" onclick="toggleCostStructureExplain()" style="margin-bottom:10px;">${costStructureExplainOpen ? '收起說明' : 'ℹ️ 了解更多'}</button>
+        ${costStructureExplainOpen ? `<div class="desc" style="margin-bottom:12px;">固定成本＝不管有沒有開課都要付的費用（例如場地租金、保險、月費訂閱）；變動成本＝隨開課量變動的費用（例如老師鐘點費、消耗品、單堂場地費）。掌握成本結構可以幫助你抓出「至少要賺多少才打平」的損益兩平點——固定成本佔比越高，代表開課量下滑時的風險越大。</div>` : ''}
         ${filteredExpense===0 ? '<div style="color:var(--muted);font-size:12.5px;">這段區間還沒有支出紀錄</div>' : `
         <div style="display:flex;height:26px;border-radius:8px;overflow:hidden;margin-bottom:10px;">
           ${fixedCostTotal>0 ? `<div style="width:${(fixedCostTotal/filteredExpense*100)}%;background:var(--danger);" title="固定成本 NT$ ${fixedCostTotal.toLocaleString()}"></div>` : ''}
@@ -3108,6 +3095,7 @@ function pageCashflow(){
           ${uncategorizedCostTotal>0 ? `<span style="color:var(--muted);">⚪ 未分類：NT$ ${uncategorizedCostTotal.toLocaleString()}（${Math.round(uncategorizedCostTotal/filteredExpense*100)}%）</span>` : ''}
         </div>`}
       </div>
+    </div>
     </div>
 
     <div class="two-col-row">
