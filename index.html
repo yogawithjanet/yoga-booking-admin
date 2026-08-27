@@ -47,13 +47,12 @@
     color:rgba(255,255,255,.45);text-transform:uppercase;
   }
   .sidebar-collapse-toggle{
-    position:absolute;top:119px;left:220px;width:16px;height:54px;
+    position:absolute;top:52px;right:0;width:16px;height:54px;
     border-radius:10px 0 0 10px;
     background:var(--paper);color:var(--sage-dark);
-    border:1px solid var(--line);border-left:none;
     display:flex;align-items:center;justify-content:center;cursor:pointer;
-    box-shadow:2px 2px 8px rgba(0,0,0,.2);
-    transition:left .18s ease;z-index:15;
+    box-shadow:-2px 2px 6px rgba(0,0,0,.25);
+    z-index:15;
   }
   .sidebar-collapse-toggle:hover{background:#fff;color:var(--sage);}
   .sidebar-collapse-toggle .collapse-ic{display:flex;transition:transform .2s ease;line-height:1;}
@@ -66,8 +65,8 @@
     .sidebar.collapsed .nav-item{justify-content:center;padding:11px 0;}
     .sidebar.collapsed .nav-item .ic{width:auto;}
     .sidebar.collapsed .sidebar-bottom{text-align:center;padding:14px 0 0;}
-    .sidebar.collapsed ~ .sidebar-collapse-toggle{left:64px;top:16px;}
-    .sidebar.collapsed ~ .sidebar-collapse-toggle .collapse-ic{transform:rotate(180deg);}
+    .sidebar.collapsed .sidebar-collapse-toggle{top:16px;}
+    .sidebar.collapsed .sidebar-collapse-toggle .collapse-ic{transform:rotate(180deg);}
   }
 
   /* ---- Main ---- */
@@ -199,9 +198,6 @@
   .col-picker-item{display:flex;align-items:center;gap:8px;padding:7px 8px;font-size:12.5px;cursor:pointer;border-radius:6px;}
   .col-picker-item:hover{background:var(--paper);}
   .col-picker-item input{width:15px;height:15px;flex-shrink:0;}
-  .th-order{display:inline-flex;flex-direction:column;gap:1px;vertical-align:middle;margin-left:5px;}
-  .th-order button{border:none;background:var(--sage-light);color:var(--sage-dark);width:16px;height:13px;border-radius:3px;cursor:pointer;font-size:8px;line-height:1;padding:0;}
-  .th-order button:disabled{opacity:.3;cursor:not-allowed;}
 
   .settings-row{display:flex;justify-content:space-between;align-items:center;padding:13px 0;border-bottom:1px solid var(--line);gap:16px;}
   .settings-row:last-child{border-bottom:none;}
@@ -258,10 +254,10 @@
   .roster-mini-calendar .mc-cell{min-height:66px;border-color:var(--line);}
   .roster-mini-calendar .mc-cell.empty{border-color:transparent;}
 
-  /* ---- 每日名單：日曆上的額滿標示（藍點=還有名額，橘點=已額滿；特意不用紅綠配色，避免色盲使用者分不清楚） ---- */
+  /* ---- 每日名單：日曆上的額滿標示（綠點=還有名額，紅點=已額滿） ---- */
   .roster-dots{display:flex;flex-wrap:wrap;gap:3px;justify-content:center;margin-top:4px;}
-  .roster-dot{width:6px;height:6px;border-radius:50%;background:#0072b2;flex-shrink:0;}
-  .roster-dot.full{background:#e69f00;}
+  .roster-dot{width:6px;height:6px;border-radius:50%;background:#3fa35e;flex-shrink:0;}
+  .roster-dot.full{background:#d1503a;}
   .roster-legend{display:flex;align-items:center;gap:6px;justify-content:center;padding-top:12px;margin-top:8px;border-top:1px solid var(--line);font-size:11.5px;color:var(--muted);}
   .roster-legend .roster-dot{margin-left:10px;}
   .roster-legend .roster-dot:first-child{margin-left:0;}
@@ -398,6 +394,11 @@
 <div id="app" style="display:none;">
   <div class="sidebar">
     <div class="brand" id="sidebarBrand">團課教室<span>後台管理系統</span></div>
+    <div class="sidebar-collapse-toggle" onclick="toggleSidebarCollapse()" title="收合／展開選單">
+      <span class="collapse-ic" id="sidebarCollapseIcon">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M15 5l-7 7 7 7" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </span>
+    </div>
     <div class="nav-item active" data-page="overview"><span class="ic">📊</span><span class="nav-label">總覽與店家設定</span></div>
     <div class="nav-item" data-page="announcement"><span class="ic">📢</span><span class="nav-label">公告推播</span></div>
 
@@ -417,12 +418,6 @@
 
     <div class="nav-item" data-page="cashflow" style="margin-top:14px;border-top:1px solid rgba(255,255,255,.12);padding-top:15px;"><span class="ic">💰</span><span class="nav-label">金流管理</span></div>
     <div class="sidebar-bottom"><span class="logout-link" onclick="logout()">🚪 <span class="nav-label">登出</span></span></div>
-  </div>
-
-  <div class="sidebar-collapse-toggle" onclick="toggleSidebarCollapse()" title="收合／展開選單">
-    <span class="collapse-ic" id="sidebarCollapseIcon">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M15 5l-7 7 7 7" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-    </span>
   </div>
 
   <div class="sidebar-backdrop" id="sidebarBackdrop" onclick="closeMobileNav()"></div>
@@ -609,14 +604,13 @@ function pageOverview(){
   return `
     <div class="page-title">總覽與店家設定</div>
     <div class="page-sub">這裡是後台管理員（老師／店家）看到的畫面，資料會即時同步到學生端的 LINE 介面。店家名稱會顯示在學生端 LINE 介面頂部，以及後台左側選單。</div>
-    <div class="stat-cards">
+    <div class="stat-cards" style="grid-template-columns:repeat(3,1fr);">
       <div class="stat-card"><div class="num">${activeClasses}</div><div class="lbl">上架中課程範本</div></div>
       <div class="stat-card"><div class="num">${data.teachers.length}</div><div class="lbl">授課老師</div></div>
-      <div class="stat-card"><div class="num">${data.notify.reminder_enabled?'已開啟':'已關閉'}</div><div class="lbl">課前提醒通知</div></div>
       <div class="stat-card"><div class="num">${data.members.length}</div><div class="lbl">已加入學員</div></div>
     </div>
-    <div class="hint-box">💡 沒有串接金流，所以不需要「線上購買方案」。學生的堂數改由<b>老師／管理員在「學員管理」手動增加</b>（例如收現金、轉帳後手動加堂），系統只負責預約時自動扣堂、取消時自動退堂。</div>
 
+    <div class="two-col-row">
     <div class="panel">
       <div class="panel-head"><h3>外觀主題</h3></div>
       <div class="panel-body">
@@ -626,15 +620,17 @@ function pageOverview(){
     </div>
 
     <div class="panel">
-      <div class="panel-head"><h3>基本資料</h3></div>
+      <div class="panel-head"><h3>店家 / 品牌名稱</h3></div>
       <div class="panel-body">
         <div class="form-grid">
-          <div class="field"><label>店家 / 品牌名稱</label><input id="stName" value="${s.name}" placeholder="例如：你的教室名稱"></div>
+          <div class="field"><input id="stName" value="${s.name}" placeholder="例如：你的教室名稱"></div>
         </div>
       </div>
       <div class="add-bar"><button class="btn btn-primary" onclick="saveStore()">儲存設定</button></div>
     </div>
+    </div>
 
+    <div class="two-col-row">
     <div class="panel">
       <div class="panel-head"><h3>登入密碼</h3></div>
       <div class="panel-body">
@@ -658,14 +654,6 @@ function pageOverview(){
       </div>
       <div class="add-bar"><button class="btn btn-primary" onclick="saveSecurityQA()">儲存安全問題</button></div>
     </div>
-
-    <div class="panel">
-      <div class="panel-head"><h3>後台可以設定的項目</h3></div>
-      <div class="panel-body">
-        <div class="settings-row"><div><div class="label">🗓️ 課程設定</div><div class="desc">設定固定的每週課表：課程名稱、老師、時間、上課星期、可預約人數，系統會依此自動產生未來每天的可預約課程；也可以在這裡設定開放預約的時間區間。</div></div></div>
-        <div class="settings-row"><div><div class="label">🧑‍🏫 老師管理</div><div class="desc">新增／編輯授課老師資料，會顯示在學生端的課程卡片上。</div></div></div>
-        <div class="settings-row"><div><div class="label">👥 學員管理</div><div class="desc">查看每位學生目前剩餘堂數、預約紀錄，並可手動增減堂數（收費後手動加堂）。</div></div></div>
-      </div>
     </div>`;
 }
 
@@ -935,11 +923,7 @@ function pageClasses(){
   else if(exceptionSortBy==='type_asc') exceptionRows.sort((a,b)=> a.type.localeCompare(b.type));
   else if(exceptionSortBy==='type_desc') exceptionRows.sort((a,b)=> b.type.localeCompare(a.type));
 
-  return `
-    <div class="page-title">課程設定</div>
-    <div class="page-sub">用左邊日曆快速調整單一天的課程內容，右邊是目前所有課程範本。</div>
-
-    <div class="two-col-row">
+  const classCalendarPanelHtml = `
     <div class="panel">
       <div class="panel-head"><h3>課程日曆</h3></div>
       <div class="panel-body">
@@ -947,7 +931,30 @@ function pageClasses(){
         ${buildClassesCalendarHTML()}
         <div style="min-height:60px;margin-top:16px;border-top:1px solid var(--line);padding-top:16px;">${buildDayDetailHTML()}</div>
       </div>
-    </div>
+    </div>`;
+
+  const exceptionPanelHtml = exceptionRows.length ? `
+    <div class="panel">
+      <div class="panel-head"><h3>停課＆特別課清單</h3></div>
+      <div class="panel-body pad0">
+        <table><thead><tr>
+          <th style="cursor:pointer;user-select:none;" onclick="sortExceptionColumn('date')">日期 ${exceptionSortArrow('date')}</th>
+          <th style="cursor:pointer;user-select:none;" onclick="sortExceptionColumn('type')">類型 ${exceptionSortArrow('type')}</th>
+          <th>內容</th><th></th>
+        </tr></thead>
+        <tbody>${exceptionRows.map(r=>`
+          <tr>
+            <td>${r.date}</td>
+            <td><span class="tag ${r.danger?'off':'on'}">${r.type}</span></td>
+            <td>${r.label}</td>
+            <td><div class="row-actions"><button class="btn btn-ghost btn-sm" onclick="removeOverride('${r.id}')">移除</button></div></td>
+          </tr>`).join('')}</tbody></table>
+      </div>
+    </div>` : '';
+
+  return `
+    <div class="page-title">課程設定</div>
+    <div class="page-sub">最上面是目前所有課程範本，下面左邊是課程日曆，右邊是停課＆特別課清單。</div>
 
     <div class="panel">
       <div class="panel-head">
@@ -1011,26 +1018,8 @@ function pageClasses(){
         `}
       </div>`}
     </div>
-    </div>
 
-    ${exceptionRows.length ? `
-    <div class="panel">
-      <div class="panel-head"><h3>停課＆特別課清單</h3></div>
-      <div class="panel-body pad0">
-        <table><thead><tr>
-          <th style="cursor:pointer;user-select:none;" onclick="sortExceptionColumn('date')">日期 ${exceptionSortArrow('date')}</th>
-          <th style="cursor:pointer;user-select:none;" onclick="sortExceptionColumn('type')">類型 ${exceptionSortArrow('type')}</th>
-          <th>內容</th><th></th>
-        </tr></thead>
-        <tbody>${exceptionRows.map(r=>`
-          <tr>
-            <td>${r.date}</td>
-            <td><span class="tag ${r.danger?'off':'on'}">${r.type}</span></td>
-            <td>${r.label}</td>
-            <td><div class="row-actions"><button class="btn btn-ghost btn-sm" onclick="removeOverride('${r.id}')">移除</button></div></td>
-          </tr>`).join('')}</tbody></table>
-      </div>
-    </div>` : ''}
+    ${exceptionPanelHtml ? `<div class="two-col-row">${classCalendarPanelHtml}${exceptionPanelHtml}</div>` : classCalendarPanelHtml}
 
     <div class="two-col-row">
     <div class="panel">
@@ -2161,7 +2150,7 @@ function pageMemberDetail(){
         <table><tbody>${registrationQuestions.map(q=>`
           <tr>
             <td style="padding:11px 18px;border-bottom:1px solid var(--line);width:40%;">${q.question}</td>
-            <td style="padding:11px 18px;border-bottom:1px solid var(--line);">${(m.registration_answers && m.registration_answers[q.id]) || '<span style="color:var(--muted);">（未回答）</span>'}</td>
+            <td style="padding:11px 18px;border-bottom:1px solid var(--line);">${(()=>{ const a = m.registration_answers && m.registration_answers[q.id]; if(Array.isArray(a)) return a.length ? a.join('、') : '<span style="color:var(--muted);">（未回答）</span>'; return a || '<span style="color:var(--muted);">（未回答）</span>'; })()}</td>
           </tr>`).join('') || '<tr><td style="padding:16px 18px;color:var(--muted);text-align:center;">表單目前沒有額外問題</td></tr>'}</tbody></table>
       </div>` : `
       <div class="panel-body" style="text-align:center;color:var(--muted);padding:20px;">這位學員還沒填過會員註冊資料</div>`}
@@ -2488,7 +2477,7 @@ let rosterDate = new Date().toISOString().slice(0,10);
 let rosterData = [];
 const rosterTodayNow = new Date();
 let rosterCalendarView = { year: rosterTodayNow.getFullYear(), month: rosterTodayNow.getMonth()+1 };
-let rosterMonthCounts = {}; // class_key -> 這個月的有效預約人數，用來判斷額滿（畫橘點）
+let rosterMonthCounts = {}; // class_key -> 這個月的有效預約人數，用來判斷額滿（畫紅點）
 
 async function loadRoster(){
   const { data: rows, error } = await db.from('bookings')
@@ -2605,7 +2594,7 @@ function pageRoster(){
 
   return `
     <div class="page-title">每日名單</div>
-    <div class="page-sub">點日曆上的日期查看當天每堂課有哪些學員預約。日曆上的藍點代表還有名額、橘點代表已經額滿（特意用藍橘配色，色盲使用者也能清楚分辨）。</div>
+    <div class="page-sub">點日曆上的日期查看當天每堂課有哪些學員預約。日曆上的綠點代表還有名額、紅點代表已經額滿。</div>
     <div class="roster-layout">
       <div class="panel">
         <div class="panel-body">
@@ -2784,6 +2773,11 @@ let editingTransactionId = null;
 let cashflowRankingPage = 1;
 const CASHFLOW_RANKING_PAGE_SIZE = 10;
 let cashflowTrendMonths = 6;
+let cashflowChartMode = 'trend'; // 'trend'（近期趨勢） 或 'yearCompare'（今年 vs 去年）
+function setCashflowChartMode(mode){
+  cashflowChartMode = mode;
+  render();
+}
 function setCashflowTrendMonths(months){
   cashflowTrendMonths = Number(months);
   render();
@@ -2965,6 +2959,67 @@ function buildCashflowTrendChart(records, monthCount){
   </div>`;
 }
 
+// 今年 vs 去年的淨利比較（用淨利而不是三條線一起比，是因為六條線疊在一起會很難看懂）
+function buildCashflowYearCompareChart(records){
+  const now = new Date();
+  const thisYear = now.getFullYear();
+  const lastYear = thisYear - 1;
+  const monthsArr = Array.from({length:12}, (_, i) => i+1);
+
+  function statsForYear(year){
+    return monthsArr.map(m=>{
+      const key = `${year}-${String(m).padStart(2,'0')}`;
+      const recs = records.filter(r=>r.occurred_at.startsWith(key));
+      const income = recs.filter(r=>r.type==='income').reduce((s,r)=>s+Number(r.amount),0);
+      const expense = recs.filter(r=>r.type==='expense').reduce((s,r)=>s+Number(r.amount),0);
+      return { month:m, profit: income-expense };
+    });
+  }
+  const thisYearStats = statsForYear(thisYear);
+  const lastYearStats = statsForYear(lastYear);
+
+  const W = 640, H = 230, padL = 54, padR = 16, padT = 16, padB = 30;
+  const plotW = W - padL - padR, plotH = H - padT - padB;
+  const allValues = [...thisYearStats, ...lastYearStats].map(m=>m.profit);
+  const maxAbs = Math.max(1, ...allValues.map(v=>Math.abs(v)));
+  const hasNegative = allValues.some(v=>v<0);
+  const yMax = maxAbs * 1.15;
+  const yMin = hasNegative ? -yMax : 0;
+  const xStep = plotW/11;
+  const xAt = i => padL + i*xStep;
+  const yAt = v => padT + plotH - ((v-yMin)/(yMax-yMin))*plotH;
+  const pathFor = stats => stats.map((m,i)=> `${i===0?'M':'L'} ${xAt(i).toFixed(1)} ${yAt(m.profit).toFixed(1)}`).join(' ');
+  const zeroY = yAt(0);
+
+  const gridLines = [0,0.25,0.5,0.75,1].map(t=>{
+    const v = yMin + (yMax-yMin)*t;
+    const y = yAt(v);
+    return `<line x1="${padL}" y1="${y.toFixed(1)}" x2="${W-padR}" y2="${y.toFixed(1)}" stroke="var(--line)" stroke-width="1"/>
+      <text x="${padL-8}" y="${(y+3.5).toFixed(1)}" font-size="10" fill="var(--muted)" text-anchor="end">${Math.round(v/1000)}k</text>`;
+  }).join('');
+  const xLabels = monthsArr.map((m,i)=>`<text x="${xAt(i).toFixed(1)}" y="${H-8}" font-size="11" fill="var(--muted)" text-anchor="middle">${m}月</text>`).join('');
+  const dotsFor = (stats, color) => stats.map((m,i)=>
+    `<circle cx="${xAt(i).toFixed(1)}" cy="${yAt(m.profit).toFixed(1)}" r="3.5" fill="${color}"><title>${m.month}月淨利：NT$ ${m.profit.toLocaleString()}</title></circle>`
+  ).join('');
+
+  return `
+  <div style="overflow-x:auto;">
+    <svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:${W}px;height:auto;display:block;">
+      ${gridLines}
+      <line x1="${padL}" y1="${zeroY.toFixed(1)}" x2="${W-padR}" y2="${zeroY.toFixed(1)}" stroke="var(--ink)" stroke-width="1" opacity=".25"/>
+      <path d="${pathFor(lastYearStats)}" fill="none" stroke="var(--clay)" stroke-width="2" stroke-dasharray="5,3" opacity=".65"/>
+      <path d="${pathFor(thisYearStats)}" fill="none" stroke="var(--clay)" stroke-width="2.5"/>
+      ${dotsFor(lastYearStats,'var(--clay)')}
+      ${dotsFor(thisYearStats,'var(--clay)')}
+      ${xLabels}
+    </svg>
+  </div>
+  <div style="display:flex;gap:18px;justify-content:center;margin-top:6px;font-size:12px;flex-wrap:wrap;color:var(--muted);">
+    <span style="display:flex;align-items:center;gap:5px;"><span style="width:14px;height:3px;background:var(--clay);display:inline-block;border-radius:2px;"></span>${thisYear} 年淨利</span>
+    <span style="display:flex;align-items:center;gap:5px;"><span style="width:14px;height:3px;background:var(--clay);opacity:.65;border-top:2px dashed var(--clay);"></span>${lastYear} 年淨利</span>
+  </div>`;
+}
+
 function pageCashflow(){
   if(!cashflowRecords){
     return `<div class="page-title">金流管理</div><div class="page-sub">正在載入收支紀錄...</div>`;
@@ -3066,16 +3121,21 @@ function pageCashflow(){
 
     <div class="two-col-row">
     <div class="panel">
-      <div class="panel-head">
+      <div class="panel-head" style="flex-wrap:wrap;gap:8px;">
         <h3>收支趨勢</h3>
-        <select onchange="setCashflowTrendMonths(this.value)" style="border:1px solid var(--line);border-radius:8px;padding:5px 9px;font-size:12px;">
-          <option value="3" ${cashflowTrendMonths===3?'selected':''}>近 3 個月</option>
-          <option value="6" ${cashflowTrendMonths===6?'selected':''}>近 6 個月</option>
-          <option value="12" ${cashflowTrendMonths===12?'selected':''}>近 12 個月</option>
-          <option value="24" ${cashflowTrendMonths===24?'selected':''}>近 24 個月</option>
-        </select>
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+          ${cashflowChartMode==='trend' ? `
+          <select onchange="setCashflowTrendMonths(this.value)" style="border:1px solid var(--line);border-radius:8px;padding:5px 9px;font-size:12px;">
+            <option value="3" ${cashflowTrendMonths===3?'selected':''}>近 3 個月</option>
+            <option value="6" ${cashflowTrendMonths===6?'selected':''}>近 6 個月</option>
+            <option value="12" ${cashflowTrendMonths===12?'selected':''}>近 12 個月</option>
+            <option value="24" ${cashflowTrendMonths===24?'selected':''}>近 24 個月</option>
+          </select>` : ''}
+          <button class="btn ${cashflowChartMode==='trend'?'btn-primary':'btn-ghost'} btn-sm" onclick="setCashflowChartMode('trend')">近期趨勢</button>
+          <button class="btn ${cashflowChartMode==='yearCompare'?'btn-primary':'btn-ghost'} btn-sm" onclick="setCashflowChartMode('yearCompare')">今年 vs 去年</button>
+        </div>
       </div>
-      <div class="panel-body">${buildCashflowTrendChart(cashflowRecords, cashflowTrendMonths)}</div>
+      <div class="panel-body">${cashflowChartMode==='trend' ? buildCashflowTrendChart(cashflowRecords, cashflowTrendMonths) : buildCashflowYearCompareChart(cashflowRecords)}</div>
     </div>
 
     <div class="panel">
@@ -3237,8 +3297,8 @@ async function unpublishRegistrationForm(){
 }
 
 function onNewRegQTypeChange(){
-  document.getElementById('newRegQOptionsField').style.display =
-    document.getElementById('newRegQType').value==='choice' ? 'block' : 'none';
+  const type = document.getElementById('newRegQType').value;
+  document.getElementById('newRegQOptionsField').style.display = (type==='choice'||type==='multichoice') ? 'block' : 'none';
 }
 function addNewRegQOption(){
   const input = document.getElementById('newRegQOptionInput');
@@ -3264,10 +3324,10 @@ async function submitNewRegQuestion(){
   const type = document.getElementById('newRegQType').value;
   const required = document.getElementById('newRegQRequired').checked;
   if(!text){ showToast('請輸入問題文字'); return; }
-  if(type==='choice' && newRegQOptions.length<2){ showToast('單選題至少要有 2 個選項'); return; }
+  if((type==='choice'||type==='multichoice') && newRegQOptions.length<2){ showToast('單選／多選題至少要有 2 個選項'); return; }
   const sortOrder = registrationQuestions.length>0 ? Math.max(...registrationQuestions.map(q=>q.sort_order)) + 1 : 0;
   const { error } = await db.from('registration_questions').insert({
-    question: text, type, options: type==='choice' ? [...newRegQOptions] : [], sort_order: sortOrder, active: true, required
+    question: text, type, options: (type==='choice'||type==='multichoice') ? [...newRegQOptions] : [], sort_order: sortOrder, active: true, required
   });
   if(error){ showToast('新增失敗'); console.error(error); return; }
   document.getElementById('newRegQText').value = '';
@@ -3314,16 +3374,59 @@ async function moveRegQuestion(id, delta){
   const tmp = a.sort_order; a.sort_order = b.sort_order; b.sort_order = tmp;
   render();
 }
-function startEditRegQuestion(id){ editingRegQuestionId = id; render(); }
-function cancelEditRegQuestion(){ editingRegQuestionId = null; render(); }
+let editRegQOptions = [];
+function startEditRegQuestion(id){
+  const q = registrationQuestions.find(x=>x.id===id);
+  editingRegQuestionId = id;
+  editRegQOptions = (q && Array.isArray(q.options)) ? [...q.options] : [];
+  render();
+}
+function cancelEditRegQuestion(){
+  editingRegQuestionId = null;
+  editRegQOptions = [];
+  render();
+}
+function onEditRegQTypeChange(id){
+  const type = document.getElementById(`rqEditType-${id}`).value;
+  document.getElementById(`rqEditOptionsField-${id}`).style.display = (type==='choice'||type==='multichoice') ? 'block' : 'none';
+}
+function addEditRegQOption(id){
+  const input = document.getElementById(`rqEditOptionInput-${id}`);
+  const val = input.value.trim();
+  if(!val) return;
+  editRegQOptions.push(val);
+  input.value = '';
+  renderEditRegQOptions(id);
+}
+function removeEditRegQOption(id, i){
+  editRegQOptions.splice(i,1);
+  renderEditRegQOptions(id);
+}
+function renderEditRegQOptions(id){
+  const el = document.getElementById(`rqEditOptionsList-${id}`);
+  if(!el) return;
+  el.innerHTML = editRegQOptions.map((o,i)=>
+    `<span class="tag-chip">${o}<span class="x" onclick="removeEditRegQOption('${id}',${i})">✕</span></span>`
+  ).join('') || '<span style="color:var(--muted);font-size:12px;">尚未新增選項</span>';
+}
+function regQTypeLabel(q){
+  if(q.type==='choice') return '單選：'+(q.options||[]).join('、');
+  if(q.type==='multichoice') return '多選：'+(q.options||[]).join('、');
+  if(q.type==='date') return '日期選擇';
+  return '簡答';
+}
 async function saveEditRegQuestion(id){
   const text = document.getElementById(`rqEditText-${id}`).value.trim();
+  const type = document.getElementById(`rqEditType-${id}`).value;
   if(!text){ showToast('問題文字不能空白'); return; }
-  const { error } = await db.from('registration_questions').update({ question: text }).eq('id', id);
+  if((type==='choice'||type==='multichoice') && editRegQOptions.length<2){ showToast('單選／多選題至少要有 2 個選項'); return; }
+  const options = (type==='choice'||type==='multichoice') ? [...editRegQOptions] : [];
+  const { error } = await db.from('registration_questions').update({ question: text, type, options }).eq('id', id);
   if(error){ showToast('更新失敗'); console.error(error); return; }
   const q = registrationQuestions.find(x=>x.id===id);
-  if(q) q.question = text;
+  if(q){ q.question = text; q.type = type; q.options = options; }
   editingRegQuestionId = null;
+  editRegQOptions = [];
   render();
   showToast('已更新問題');
 }
@@ -3368,10 +3471,30 @@ function pageRegistration(){
     const isEditing = editingRegQuestionId===q.id;
     if(isEditing){
       return `
-      <div class="q-row" style="align-items:end;">
-        <div class="field" style="flex:1;"><label>問題文字</label><input id="rqEditText-${q.id}" value="${q.question}"></div>
-        <button class="btn btn-ghost btn-sm" onclick="cancelEditRegQuestion()">取消</button>
-        <button class="btn btn-primary btn-sm" onclick="saveEditRegQuestion('${q.id}')">儲存</button>
+      <div class="q-row" style="flex-direction:column;align-items:stretch;gap:10px;">
+        <div class="form-grid">
+          <div class="field" style="grid-column:1/-1;"><label>問題文字</label><input id="rqEditText-${q.id}" value="${q.question}"></div>
+          <div class="field"><label>題型</label>
+            <select id="rqEditType-${q.id}" onchange="onEditRegQTypeChange('${q.id}')">
+              <option value="text" ${q.type==='text'?'selected':''}>簡答（自由輸入文字）</option>
+              <option value="choice" ${q.type==='choice'?'selected':''}>單選（自己設定選項）</option>
+              <option value="multichoice" ${q.type==='multichoice'?'selected':''}>多選（自己設定選項）</option>
+              <option value="date" ${q.type==='date'?'selected':''}>日期選擇</option>
+            </select>
+          </div>
+          <div class="field" id="rqEditOptionsField-${q.id}" style="display:${(q.type==='choice'||q.type==='multichoice')?'block':'none'};grid-column:1/-1;">
+            <label>選項</label>
+            <div class="tag-add-row">
+              <input id="rqEditOptionInput-${q.id}" placeholder="輸入一個選項後按新增">
+              <button class="tag-add-btn" type="button" onclick="addEditRegQOption('${q.id}')">＋</button>
+            </div>
+            <div id="rqEditOptionsList-${q.id}" class="tag-chip-wrap">${editRegQOptions.map((o,i)=>`<span class="tag-chip">${o}<span class="x" onclick="removeEditRegQOption('${q.id}',${i})">✕</span></span>`).join('') || '<span style="color:var(--muted);font-size:12px;">尚未新增選項</span>'}</div>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;justify-content:flex-end;">
+          <button class="btn btn-ghost btn-sm" onclick="cancelEditRegQuestion()">取消</button>
+          <button class="btn btn-primary btn-sm" onclick="saveEditRegQuestion('${q.id}')">儲存</button>
+        </div>
       </div>`;
     }
     return `
@@ -3383,7 +3506,7 @@ function pageRegistration(){
         <div class="q-main">
           <div class="q-text">${q.question}</div>
           <div class="q-meta" style="margin-top:6px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
-            <span class="tag ${q.type==='choice'?'on':'off'}">${q.type==='choice' ? '單選：'+(q.options||[]).join('、') : '簡答'}</span>
+            <button class="tag-btn ${q.type==='text'?'off':'on'}" onclick="startEditRegQuestion('${q.id}')" title="點一下可以修改題型">${regQTypeLabel(q)}</button>
             <button class="tag-btn ${q.active?'on':'off'}" onclick="toggleRegQuestionActive('${q.id}')">${q.active?'顯示中':'已隱藏'}</button>
             <button class="tag-btn ${q.required?'warn':'off'}" onclick="toggleRegQuestionRequired('${q.id}')">${q.required?'必填':'選填'}</button>
             <div style="margin-left:auto;display:flex;gap:6px;">
@@ -3425,6 +3548,8 @@ function pageRegistration(){
             <select id="newRegQType" onchange="onNewRegQTypeChange()">
               <option value="text">簡答（自由輸入文字）</option>
               <option value="choice">單選（自己設定選項）</option>
+              <option value="multichoice">多選（自己設定選項）</option>
+              <option value="date">日期選擇</option>
             </select>
           </div>
           <div class="field" id="newRegQOptionsField" style="display:none;grid-column:1/-1;">
@@ -3464,51 +3589,34 @@ async function goToMemberFromRegistrants(lineUserId){
 }
 
 /* ---- 學員資料表格的欄位設定（顯示／隱藏、排序），存在瀏覽器 localStorage，每台裝置各自記憶 ---- */
-const REGISTRANTS_COLUMNS_KEY = 'admin-registrants-columns-v1';
+// 學員資料表格目前只固定顯示這 5 個欄位（其他自訂問題的答案，可以到學員管理→查看／管理裡看完整內容）
+const REGISTRANTS_VISIBLE_KEY = 'admin-registrants-visible-v1';
 function registrantFieldDefs(){
-  return [
+  const fields = [
     { key:'display_name', label:'學員（LINE 顯示名稱）' },
-    { key:'registration_name', label:'註冊姓名' },
-    { key:'registration_contact', label:'e-mail' },
-    { key:'registration_submitted_at', label:'填寫時間' },
-    ...registrationQuestions.map(q=>({ key:'q_'+q.id, label:q.question, qid:q.id }))
+    { key:'registration_name', label:'姓名' }
   ];
+  const ageQ = registrationQuestions.find(q=>q.question==='年紀');
+  if(ageQ) fields.push({ key:'q_'+ageQ.id, label:'年紀', qid:ageQ.id });
+  fields.push({ key:'registration_contact', label:'e-mail' });
+  fields.push({ key:'registration_submitted_at', label:'填寫時間' });
+  return fields;
 }
-function loadRegistrantColumnPrefs(){
+function loadRegistrantVisiblePrefs(){
   const fields = registrantFieldDefs();
   let saved = null;
-  try{ saved = JSON.parse(localStorage.getItem(REGISTRANTS_COLUMNS_KEY)||'null'); }catch(e){}
-  let order;
-  if(saved && Array.isArray(saved)){
-    order = saved.filter(o=>fields.some(f=>f.key===o.key)); // 濾掉已經刪除的問題欄位
-    const known = new Set(order.map(o=>o.key));
-    fields.forEach(f=>{ if(!known.has(f.key)) order.push({ key:f.key, visible:true }); }); // 補上新出現的欄位（例如新加的註冊問題）
-  } else {
-    order = fields.map(f=>({ key:f.key, visible:true }));
-  }
-  return order;
+  try{ saved = JSON.parse(localStorage.getItem(REGISTRANTS_VISIBLE_KEY)||'null'); }catch(e){}
+  const visible = {};
+  fields.forEach(f=>{ visible[f.key] = (saved && Object.prototype.hasOwnProperty.call(saved, f.key)) ? !!saved[f.key] : true; });
+  return visible;
 }
-function saveRegistrantColumnPrefs(order){
-  localStorage.setItem(REGISTRANTS_COLUMNS_KEY, JSON.stringify(order));
-}
-function moveRegistrantColumn(key, dir){
-  // 只在「目前顯示中」的欄位之間移動位置，跳過隱藏的欄位
-  const order = loadRegistrantColumnPrefs();
-  const visibleIdxs = order.map((o,i)=>o.visible?i:-1).filter(i=>i>=0);
-  const posInVisible = visibleIdxs.findIndex(i=>order[i].key===key);
-  const targetPos = posInVisible + dir;
-  if(posInVisible<0 || targetPos<0 || targetPos>=visibleIdxs.length) return;
-  const idxA = visibleIdxs[posInVisible];
-  const idxB = visibleIdxs[targetPos];
-  [order[idxA], order[idxB]] = [order[idxB], order[idxA]];
-  saveRegistrantColumnPrefs(order);
-  render();
+function saveRegistrantVisiblePrefs(visible){
+  localStorage.setItem(REGISTRANTS_VISIBLE_KEY, JSON.stringify(visible));
 }
 function toggleRegistrantColumn(key){
-  const order = loadRegistrantColumnPrefs();
-  const item = order.find(o=>o.key===key);
-  if(item) item.visible = !item.visible;
-  saveRegistrantColumnPrefs(order);
+  const visible = loadRegistrantVisiblePrefs();
+  visible[key] = !visible[key];
+  saveRegistrantVisiblePrefs(visible);
   render();
 }
 function registrantCellValue(m, field){
@@ -3521,8 +3629,32 @@ function registrantCellValue(m, field){
   if(field.key==='registration_name') return m.registration_name || '—';
   if(field.key==='registration_contact') return m.registration_contact || '—';
   if(field.key==='registration_submitted_at') return m.registration_submitted_at ? new Date(m.registration_submitted_at).toLocaleDateString('zh-TW') : '—';
-  if(field.qid){ const ans = (m.registration_answers||{})[field.qid]; return (ans!=null && ans!=='') ? ans : '—'; }
+  if(field.qid){
+    const ans = (m.registration_answers||{})[field.qid];
+    if(Array.isArray(ans)) return ans.length ? ans.join('、') : '—';
+    return (ans!=null && ans!=='') ? ans : '—';
+  }
   return '—';
+}
+function registrantSortValue(m, field){
+  if(field.key==='display_name') return (m.display_name||'').toLowerCase();
+  if(field.key==='registration_name') return (m.registration_name||'').toLowerCase();
+  if(field.key==='registration_contact') return (m.registration_contact||'').toLowerCase();
+  if(field.key==='registration_submitted_at') return m.registration_submitted_at ? new Date(m.registration_submitted_at).getTime() : 0;
+  if(field.qid){ const ans = (m.registration_answers||{})[field.qid]; return typeof ans==='string' ? ans.toLowerCase() : (ans||''); }
+  return '';
+}
+let registrantSortBy = 'default';
+function sortRegistrantColumn(key){
+  if(registrantSortBy === key+'_asc') registrantSortBy = key+'_desc';
+  else if(registrantSortBy === key+'_desc') registrantSortBy = 'default';
+  else registrantSortBy = key+'_asc';
+  render();
+}
+function registrantSortArrow(key){
+  if(registrantSortBy===key+'_asc') return '<span style="color:var(--sage-dark);">▲</span>';
+  if(registrantSortBy===key+'_desc') return '<span style="color:var(--sage-dark);">▼</span>';
+  return '<span style="color:var(--muted);opacity:.5;">↕</span>';
 }
 
 let registrantColumnPickerOpen = false;
@@ -3532,20 +3664,31 @@ function toggleRegistrantColumnPicker(){
 }
 
 function pageRegistrants(){
-  const registered = [...data.members].filter(m=>m.registration_submitted_at)
-    .sort((a,b)=> new Date(b.registration_submitted_at) - new Date(a.registration_submitted_at));
+  let registered = [...data.members].filter(m=>m.registration_submitted_at);
   const notRegisteredCount = data.members.length - registered.length;
 
   const fields = registrantFieldDefs();
-  const columnOrder = loadRegistrantColumnPrefs();
-  const visibleFields = columnOrder.filter(c=>c.visible).map(c=>fields.find(f=>f.key===c.key)).filter(Boolean);
-  const visibleCount = columnOrder.filter(c=>c.visible).length;
+  const visiblePrefs = loadRegistrantVisiblePrefs();
+  const visibleFields = fields.filter(f=>visiblePrefs[f.key]);
+  const visibleCount = visibleFields.length;
 
-  const columnPickerItems = columnOrder.map(c=>{
-    const field = fields.find(f=>f.key===c.key);
-    if(!field) return '';
-    return `<label class="col-picker-item"><input type="checkbox" ${c.visible?'checked':''} onchange="toggleRegistrantColumn('${c.key}')">${field.label}</label>`;
-  }).join('');
+  if(registrantSortBy==='default' || !fields.some(f=>registrantSortBy===f.key+'_asc' || registrantSortBy===f.key+'_desc')){
+    registered.sort((a,b)=> new Date(b.registration_submitted_at) - new Date(a.registration_submitted_at));
+  } else {
+    const sortKey = registrantSortBy.replace(/_(asc|desc)$/,'');
+    const dir = registrantSortBy.endsWith('_asc') ? 1 : -1;
+    const field = fields.find(f=>f.key===sortKey);
+    registered.sort((a,b)=>{
+      const va = registrantSortValue(a, field), vb = registrantSortValue(b, field);
+      if(va<vb) return -1*dir;
+      if(va>vb) return 1*dir;
+      return 0;
+    });
+  }
+
+  const columnPickerItems = fields.map(f=>
+    `<label class="col-picker-item"><input type="checkbox" ${visiblePrefs[f.key]?'checked':''} onchange="toggleRegistrantColumn('${f.key}')">${f.label}</label>`
+  ).join('');
 
   const rows = registered.map(m=>`
     <tr>
@@ -3555,7 +3698,7 @@ function pageRegistrants(){
 
   return `
     <div class="page-title">學員資料</div>
-    <div class="page-sub">所有已經填寫過「會員註冊」表單的學員資料，包含每一題的填寫內容。點「查看／管理」會進到該學員完整的詳細頁面（堂數、預約、消費、註冊資料都在同一頁）。</div>
+    <div class="page-sub">所有已經填寫過「會員註冊」表單的學員資料。點「查看／管理」會進到該學員完整的詳細頁面（堂數、預約、消費、完整註冊資料都在同一頁）。</div>
     <div class="stat-cards" style="grid-template-columns:repeat(2,1fr);">
       <div class="stat-card"><div class="num">${registered.length}</div><div class="lbl">已填寫註冊資料</div></div>
       <div class="stat-card"><div class="num">${notRegisteredCount}</div><div class="lbl">尚未填寫</div></div>
@@ -3568,15 +3711,12 @@ function pageRegistrants(){
           <button class="btn btn-ghost btn-sm" onclick="toggleRegistrantColumnPicker()">🔧 欄位顯示設定（已選 ${visibleCount}） ${registrantColumnPickerOpen?'▲':'▼'}</button>
           ${registrantColumnPickerOpen ? `<div class="col-picker-dropdown">${columnPickerItems}</div>` : ''}
         </div>
-        <div class="desc" style="margin-top:8px;">勾選要顯示的欄位；欄位順序可以直接在下面表格的標題上用 ▲▼ 調整。</div>
+        <div class="desc" style="margin-top:8px;">勾選要顯示的欄位；點下面表格的標題可以依那個欄位排序。</div>
       </div>
       <div class="panel-body pad0" style="overflow-x:auto;">
         ${visibleFields.length===0
           ? '<div style="text-align:center;color:var(--muted);padding:24px;">目前所有欄位都被隱藏了，請點上面「欄位顯示設定」至少勾選一個欄位</div>'
-          : `<table><thead><tr>${visibleFields.map((f,i)=>`<th><span>${f.label}</span><span class="th-order">
-              <button onclick="moveRegistrantColumn('${f.key}',-1)" ${i===0?'disabled':''} title="往前移">▲</button>
-              <button onclick="moveRegistrantColumn('${f.key}',1)" ${i===visibleFields.length-1?'disabled':''} title="往後移">▼</button>
-            </span></th>`).join('')}<th></th></tr></thead>
+          : `<table><thead><tr>${visibleFields.map(f=>`<th style="cursor:pointer;user-select:none;" onclick="sortRegistrantColumn('${f.key}')">${f.label} ${registrantSortArrow(f.key)}</th>`).join('')}<th></th></tr></thead>
         <tbody>${rows || `<tr><td colspan="${visibleFields.length+1}" style="text-align:center;color:var(--muted);padding:24px;">目前還沒有學員填寫過會員註冊表單</td></tr>`}</tbody></table>`}
       </div>
     </div>`;
