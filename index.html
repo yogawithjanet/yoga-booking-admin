@@ -184,7 +184,8 @@
   /* ---- 報名表單設定：問題列表 ---- */
   .q-row{display:flex;align-items:flex-start;gap:12px;padding:14px 18px;border-bottom:1px solid var(--line);}
   .q-row:last-child{border-bottom:none;}
-  .q-order{display:flex;flex-direction:column;gap:2px;}
+  .q-order{display:flex;flex-direction:column;gap:2px;cursor:grab;}
+  .q-order:active{cursor:grabbing;}
   .q-order button{border:none;background:var(--sage-light);color:var(--sage-dark);width:22px;height:18px;border-radius:5px;cursor:pointer;font-size:10px;line-height:1;}
   .q-order button:disabled{opacity:.3;cursor:not-allowed;}
   .q-main{flex:1;min-width:0;}
@@ -3445,18 +3446,64 @@ async function deleteRegQuestion(id){
   render();
   showToast('已刪除');
 }
-async function moveRegQuestion(id, delta){
-  // 生日／年紀是固定顯示在最前面的「預設欄位」，不列入排序，只在其餘的自訂問題之間移動
-  const otherQuestions = registrationQuestions.filter(q=>q.question!=='生日' && q.question!=='年紀');
-  const idx = otherQuestions.findIndex(x=>x.id===id);
+// 註冊表單的欄位順序：姓名／e-mail（寫死的固定欄位）、生日／年紀（預設欄位）、
+// 其餘自訂問題全部統一放在同一份順序清單裡（存在 store_settings.registration_field_order，
+// 一個 key 陣列，'name'／'contact' 代表固定欄位，'q_<id>' 代表某一題）。
+// 這樣姓名／生日／e-mail／年紀跟其他問題才能自由地互相調整順序，不再被寫死卡住。
+function computeRegFieldOrder(){
+  const otherQs = [...registrationQuestions].sort((a,b)=>a.sort_order-b.sort_order);
+  const birthdayQ = registrationQuestions.find(q=>q.question==='生日');
+  const ageQ = registrationQuestions.find(q=>q.question==='年紀');
+  const defaultOrder = [
+    'name',
+    ...(birthdayQ ? [`q_${birthdayQ.id}`] : []),
+    'contact',
+    ...(ageQ ? [`q_${ageQ.id}`] : []),
+    ...otherQs.filter(q=>q.question!=='生日' && q.question!=='年紀').map(q=>`q_${q.id}`)
+  ];
+  const validKeys = new Set(['name','contact', ...otherQs.map(q=>`q_${q.id}`)]);
+  const saved = data.store.registration_field_order;
+  if(!Array.isArray(saved) || saved.length===0) return defaultOrder;
+  let order = saved.filter(k=>validKeys.has(k));
+  const known = new Set(order);
+  defaultOrder.forEach(k=>{ if(!known.has(k)) order.push(k); }); // 補上新出現的欄位（新問題、新預設欄位）
+  return order;
+}
+async function saveRegFieldOrder(order){
+  const { error } = await db.from('store_settings').update({ registration_field_order: order }).eq('id', 1);
+  if(error){ showToast('排序儲存失敗（可能資料庫還沒有這個欄位，請確認已執行 SQL migration）'); console.error(error); return; }
+  data.store.registration_field_order = order;
+}
+async function moveRegField(key, delta){
+  const order = computeRegFieldOrder();
+  const idx = order.indexOf(key);
   const newIdx = idx + delta;
-  if(idx<0 || newIdx<0 || newIdx>=otherQuestions.length) return;
-  const a = otherQuestions[idx], b = otherQuestions[newIdx];
-  await Promise.all([
-    db.from('registration_questions').update({ sort_order: b.sort_order }).eq('id', a.id),
-    db.from('registration_questions').update({ sort_order: a.sort_order }).eq('id', b.id)
-  ]);
-  const tmp = a.sort_order; a.sort_order = b.sort_order; b.sort_order = tmp;
+  if(idx<0 || newIdx<0 || newIdx>=order.length) return;
+  [order[idx], order[newIdx]] = [order[newIdx], order[idx]];
+  await saveRegFieldOrder(order);
+  render();
+}
+let draggedRegFieldKey = null;
+function onRegFieldDragStart(e, key){
+  draggedRegFieldKey = key;
+  e.dataTransfer.effectAllowed = 'move';
+}
+function onRegFieldDragOver(e){
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+}
+async function onRegFieldDrop(e, targetKey){
+  e.preventDefault();
+  const draggedKey = draggedRegFieldKey;
+  draggedRegFieldKey = null;
+  if(!draggedKey || draggedKey===targetKey) return;
+  const order = computeRegFieldOrder();
+  const fromIdx = order.indexOf(draggedKey);
+  const toIdx = order.indexOf(targetKey);
+  if(fromIdx<0 || toIdx<0) return;
+  order.splice(fromIdx, 1);
+  order.splice(toIdx, 0, draggedKey);
+  await saveRegFieldOrder(order);
   render();
 }
 let editRegQOptions = [];
@@ -3535,16 +3582,17 @@ async function toggleRegistrationShowContact(){
   render();
 }
 
-function pageRegistration(){
-  const isPublished = data.store.registration_form_status==='published';
-
-  // 姓名／e-mail 是寫死的固定欄位；生日／年紀是「預設欄位」（本質上是 registration_questions
-  // 裡的一筆資料，只是固定顯示在最前面、用同樣的灰色標籤呈現）。順序固定為：姓名、生日、e-mail、年紀。
-  const birthdayQ = registrationQuestions.find(q=>q.question==='生日');
-  const ageQ = registrationQuestions.find(q=>q.question==='年紀');
-  const buildFixedFieldRow = f => `
-    <div class="q-row">
-      <div class="q-order" style="visibility:hidden;"><button>▲</button><button>▼</button></div>
+function buildRegFieldOrderControls(key, isFirst, isLast){
+  return `
+    <div class="q-order" draggable="true" ondragstart="onRegFieldDragStart(event,'${key}')" title="按住拖曳，或用上下箭頭調整順序">
+      <button onclick="moveRegField('${key}',-1)" ${isFirst?'disabled':''}>▲</button>
+      <button onclick="moveRegField('${key}',1)" ${isLast?'disabled':''}>▼</button>
+    </div>`;
+}
+function buildFixedFieldRow(f, key, isFirst, isLast){
+  return `
+    <div class="q-row" ondragover="onRegFieldDragOver(event)" ondrop="onRegFieldDrop(event,'${key}')">
+      ${buildRegFieldOrderControls(key, isFirst, isLast)}
       <div class="q-main">
         <div class="q-text">${f.label}</div>
         <div class="q-meta" style="margin-top:6px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
@@ -3553,9 +3601,11 @@ function pageRegistration(){
         </div>
       </div>
     </div>`;
-  const buildPromotedDefaultRow = q => `
-    <div class="q-row">
-      <div class="q-order" style="visibility:hidden;"><button>▲</button><button>▼</button></div>
+}
+function buildPromotedDefaultRow(q, key, isFirst, isLast){
+  return `
+    <div class="q-row" ondragover="onRegFieldDragOver(event)" ondrop="onRegFieldDrop(event,'${key}')">
+      ${buildRegFieldOrderControls(key, isFirst, isLast)}
       <div class="q-main">
         <div class="q-text">${q.question}</div>
         <div class="q-meta" style="margin-top:6px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
@@ -3564,64 +3614,73 @@ function pageRegistration(){
         </div>
       </div>
     </div>`;
-  const fixedFieldRows = [
-    buildFixedFieldRow({ label:'姓名', shown: data.store.registration_show_name!==false, toggleFn:'toggleRegistrationShowName' }),
-    birthdayQ ? buildPromotedDefaultRow(birthdayQ) : '',
-    buildFixedFieldRow({ label:'e-mail', shown: data.store.registration_show_contact!==false, toggleFn:'toggleRegistrationShowContact' }),
-    ageQ ? buildPromotedDefaultRow(ageQ) : ''
-  ].join('');
-
-  const otherQuestions = registrationQuestions.filter(q=>q.question!=='生日' && q.question!=='年紀');
-  const rows = otherQuestions.map((q,i)=>{
-    const isEditing = editingRegQuestionId===q.id;
-    if(isEditing){
-      return `
-      <div class="q-row" style="flex-direction:column;align-items:stretch;gap:10px;">
-        <div class="form-grid">
-          <div class="field" style="grid-column:1/-1;"><label>問題文字</label><input id="rqEditText-${q.id}" value="${q.question}"></div>
-          <div class="field"><label>題型</label>
-            <select id="rqEditType-${q.id}" onchange="onEditRegQTypeChange('${q.id}')">
-              <option value="text" ${q.type==='text'?'selected':''}>簡答（自由輸入文字）</option>
-              <option value="choice" ${q.type==='choice'?'selected':''}>單選（自己設定選項）</option>
-              <option value="multichoice" ${q.type==='multichoice'?'selected':''}>多選（自己設定選項）</option>
-              <option value="date" ${q.type==='date'?'selected':''}>日期選擇</option>
-              <option value="note" ${q.type==='note'?'selected':''}>說明文字（不是問題，只顯示一段文字）</option>
-            </select>
-          </div>
-          <div class="field" id="rqEditOptionsField-${q.id}" style="display:${(q.type==='choice'||q.type==='multichoice')?'block':'none'};grid-column:1/-1;">
-            <label>選項</label>
-            <div class="tag-add-row">
-              <input id="rqEditOptionInput-${q.id}" placeholder="輸入一個選項後按新增">
-              <button class="tag-add-btn" type="button" onclick="addEditRegQOption('${q.id}')">＋</button>
-            </div>
-            <div id="rqEditOptionsList-${q.id}" class="tag-chip-wrap">${editRegQOptions.map((o,i)=>`<span class="tag-chip">${o}<span class="x" onclick="removeEditRegQOption('${q.id}',${i})">✕</span></span>`).join('') || '<span style="color:var(--muted);font-size:12px;">尚未新增選項</span>'}</div>
-          </div>
-        </div>
-        <div style="display:flex;gap:8px;justify-content:flex-end;">
-          <button class="btn btn-ghost btn-sm" onclick="cancelEditRegQuestion()">取消</button>
-          <button class="btn btn-primary btn-sm" onclick="saveEditRegQuestion('${q.id}')">儲存</button>
-        </div>
-      </div>`;
-    }
+}
+function buildCustomQuestionRow(q, key, isFirst, isLast){
+  const isEditing = editingRegQuestionId===q.id;
+  if(isEditing){
     return `
-      <div class="q-row">
-        <div class="q-order">
-          <button onclick="moveRegQuestion('${q.id}',-1)" ${i===0?'disabled':''}>▲</button>
-          <button onclick="moveRegQuestion('${q.id}',1)" ${i===otherQuestions.length-1?'disabled':''}>▼</button>
+    <div class="q-row" style="flex-direction:column;align-items:stretch;gap:10px;">
+      <div class="form-grid">
+        <div class="field" style="grid-column:1/-1;"><label>問題文字</label><input id="rqEditText-${q.id}" value="${q.question}"></div>
+        <div class="field"><label>題型</label>
+          <select id="rqEditType-${q.id}" onchange="onEditRegQTypeChange('${q.id}')">
+            <option value="text" ${q.type==='text'?'selected':''}>簡答（自由輸入文字）</option>
+            <option value="choice" ${q.type==='choice'?'selected':''}>單選（自己設定選項）</option>
+            <option value="multichoice" ${q.type==='multichoice'?'selected':''}>多選（自己設定選項）</option>
+            <option value="date" ${q.type==='date'?'selected':''}>日期選擇</option>
+            <option value="note" ${q.type==='note'?'selected':''}>說明文字（不是問題，只顯示一段文字）</option>
+          </select>
         </div>
-        <div class="q-main">
-          <div class="q-text">${q.question}</div>
-          <div class="q-meta" style="margin-top:6px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
-            <button class="tag-btn ${q.type==='text'?'off':'on'}" onclick="startEditRegQuestion('${q.id}')" title="點一下可以修改題型">${regQTypeLabel(q)}</button>
-            <button class="tag-btn ${q.active?'on':'off'}" onclick="toggleRegQuestionActive('${q.id}')">${q.active?'顯示中':'已隱藏'}</button>
-            ${q.type!=='note' ? `<button class="tag-btn ${q.required?'warn':'off'}" onclick="toggleRegQuestionRequired('${q.id}')">${q.required?'必填':'選填'}</button>` : ''}
-            <div style="margin-left:auto;display:flex;gap:6px;">
-              <button class="btn btn-ghost btn-sm" onclick="startEditRegQuestion('${q.id}')">編輯</button>
-              <button class="btn btn-danger btn-sm" onclick="deleteRegQuestion('${q.id}')">刪除</button>
-            </div>
+        <div class="field" id="rqEditOptionsField-${q.id}" style="display:${(q.type==='choice'||q.type==='multichoice')?'block':'none'};grid-column:1/-1;">
+          <label>選項</label>
+          <div class="tag-add-row">
+            <input id="rqEditOptionInput-${q.id}" placeholder="輸入一個選項後按新增">
+            <button class="tag-add-btn" type="button" onclick="addEditRegQOption('${q.id}')">＋</button>
+          </div>
+          <div id="rqEditOptionsList-${q.id}" class="tag-chip-wrap">${editRegQOptions.map((o,i)=>`<span class="tag-chip">${o}<span class="x" onclick="removeEditRegQOption('${q.id}',${i})">✕</span></span>`).join('') || '<span style="color:var(--muted);font-size:12px;">尚未新增選項</span>'}</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;">
+        <button class="btn btn-ghost btn-sm" onclick="cancelEditRegQuestion()">取消</button>
+        <button class="btn btn-primary btn-sm" onclick="saveEditRegQuestion('${q.id}')">儲存</button>
+      </div>
+    </div>`;
+  }
+  return `
+    <div class="q-row" ondragover="onRegFieldDragOver(event)" ondrop="onRegFieldDrop(event,'${key}')">
+      ${buildRegFieldOrderControls(key, isFirst, isLast)}
+      <div class="q-main">
+        <div class="q-text">${q.question}</div>
+        <div class="q-meta" style="margin-top:6px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+          <button class="tag-btn ${q.type==='text'?'off':'on'}" onclick="startEditRegQuestion('${q.id}')" title="點一下可以修改題型">${regQTypeLabel(q)}</button>
+          <button class="tag-btn ${q.active?'on':'off'}" onclick="toggleRegQuestionActive('${q.id}')">${q.active?'顯示中':'已隱藏'}</button>
+          ${q.type!=='note' ? `<button class="tag-btn ${q.required?'warn':'off'}" onclick="toggleRegQuestionRequired('${q.id}')">${q.required?'必填':'選填'}</button>` : ''}
+          <div style="margin-left:auto;display:flex;gap:6px;">
+            <button class="btn btn-ghost btn-sm" onclick="startEditRegQuestion('${q.id}')">編輯</button>
+            <button class="btn btn-danger btn-sm" onclick="deleteRegQuestion('${q.id}')">刪除</button>
           </div>
         </div>
-      </div>`;
+      </div>
+    </div>`;
+}
+
+function pageRegistration(){
+  const isPublished = data.store.registration_form_status==='published';
+
+  // 姓名／e-mail／生日／年紀／其他自訂問題全部統一放在同一份可拖曳排序的清單裡（見 computeRegFieldOrder）。
+  const fieldOrder = computeRegFieldOrder();
+  const allFieldRows = fieldOrder.map((key, i)=>{
+    const isFirst = i===0, isLast = i===fieldOrder.length-1;
+    if(key==='name') return buildFixedFieldRow({ label:'姓名', shown: data.store.registration_show_name!==false, toggleFn:'toggleRegistrationShowName' }, key, isFirst, isLast);
+    if(key==='contact') return buildFixedFieldRow({ label:'e-mail', shown: data.store.registration_show_contact!==false, toggleFn:'toggleRegistrationShowContact' }, key, isFirst, isLast);
+    if(key.startsWith('q_')){
+      const qid = key.slice(2);
+      const q = registrationQuestions.find(x=>x.id===qid);
+      if(!q) return '';
+      if(q.question==='生日' || q.question==='年紀') return buildPromotedDefaultRow(q, key, isFirst, isLast);
+      return buildCustomQuestionRow(q, key, isFirst, isLast);
+    }
+    return '';
   }).join('');
 
   return `
@@ -3678,7 +3737,7 @@ function pageRegistration(){
 
     <div class="panel">
       <div class="panel-head"><h3>目前的問題（照這個順序顯示在表單上）</h3></div>
-      <div class="panel-body pad0">${fixedFieldRows}${rows || '<div class="empty-state" style="padding:24px;color:var(--muted);text-align:center;">目前沒有其他自訂問題，上面新增一個看看吧</div>'}</div>
+      <div class="panel-body pad0">${allFieldRows}</div>
     </div>
     </div>`;
 }
