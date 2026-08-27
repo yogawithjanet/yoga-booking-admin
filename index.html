@@ -46,6 +46,24 @@
     padding:16px 22px 6px;font-size:10.5px;font-weight:700;letter-spacing:1px;
     color:rgba(255,255,255,.45);text-transform:uppercase;
   }
+  .sidebar-collapse-toggle{
+    display:flex;align-items:center;gap:6px;margin:0 14px 14px;padding:7px 10px;border-radius:8px;
+    background:rgba(255,255,255,.08);color:rgba(255,255,255,.75);font-size:11.5px;cursor:pointer;
+  }
+  .sidebar-collapse-toggle:hover{background:rgba(255,255,255,.16);color:#fff;}
+  .sidebar-collapse-toggle .collapse-ic{display:inline-block;transition:transform .2s ease;}
+  @media (min-width:861px){
+    .sidebar{transition:width .18s ease;}
+    .sidebar.collapsed{width:64px;}
+    .sidebar.collapsed .brand{display:none;}
+    .sidebar.collapsed .nav-label{display:none;}
+    .sidebar.collapsed .nav-group-title{display:none;}
+    .sidebar.collapsed .nav-item{justify-content:center;padding:11px 0;}
+    .sidebar.collapsed .nav-item .ic{width:auto;}
+    .sidebar.collapsed .sidebar-collapse-toggle{justify-content:center;margin:0 10px 14px;}
+    .sidebar.collapsed .sidebar-collapse-toggle .collapse-ic{transform:rotate(180deg);}
+    .sidebar.collapsed .sidebar-bottom{text-align:center;padding:14px 0 0;}
+  }
 
   /* ---- Main ---- */
   .main{flex:1;padding:30px 36px;max-width:1220px;}
@@ -161,6 +179,24 @@
   .q-text{font-size:13.5px;font-weight:700;}
   .q-meta{font-size:11.5px;color:var(--muted);margin-top:3px;}
   .q-actions{display:flex;align-items:center;gap:6px;flex-shrink:0;}
+  .tag-btn{border:none;cursor:pointer;display:inline-block;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:600;}
+  .tag-btn.on{background:var(--sage-light);color:var(--sage-dark);}
+  .tag-btn.off{background:#f1efe8;color:var(--muted);}
+  .tag-btn.warn{background:#fdf1d0;color:#8a6a1f;}
+  .tag-btn:hover{filter:brightness(.95);}
+
+  /* ---- 學員資料：欄位顯示設定下拉選單 ---- */
+  .col-picker-dropdown{
+    position:absolute;top:calc(100% + 6px);left:0;background:#fff;border:1px solid var(--line);
+    border-radius:10px;box-shadow:0 10px 28px rgba(0,0,0,.14);padding:8px;z-index:30;
+    min-width:230px;max-height:320px;overflow-y:auto;
+  }
+  .col-picker-item{display:flex;align-items:center;gap:8px;padding:7px 8px;font-size:12.5px;cursor:pointer;border-radius:6px;}
+  .col-picker-item:hover{background:var(--paper);}
+  .col-picker-item input{width:15px;height:15px;flex-shrink:0;}
+  .th-order{display:inline-flex;flex-direction:column;gap:1px;vertical-align:middle;margin-left:5px;}
+  .th-order button{border:none;background:var(--sage-light);color:var(--sage-dark);width:16px;height:13px;border-radius:3px;cursor:pointer;font-size:8px;line-height:1;padding:0;}
+  .th-order button:disabled{opacity:.3;cursor:not-allowed;}
 
   .settings-row{display:flex;justify-content:space-between;align-items:center;padding:13px 0;border-bottom:1px solid var(--line);gap:16px;}
   .settings-row:last-child{border-bottom:none;}
@@ -251,7 +287,8 @@
   .logout-link:hover{color:#fff;}
 
   .two-col-row{display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:stretch;}
-  .roster-layout{display:grid;grid-template-columns:380px 1fr;gap:20px;align-items:start;}
+  .roster-layout{display:grid;grid-template-columns:2fr 1fr;gap:20px;align-items:start;}
+  .classes-layout{display:grid;grid-template-columns:2fr 1fr;gap:20px;align-items:start;}
 
   /* ---- 手機版選單開關（桌面版預設隱藏） ---- */
   .mobile-topbar{display:none;}
@@ -286,6 +323,7 @@
     .form-grid{grid-template-columns:1fr;}
     .two-col-row{grid-template-columns:1fr;gap:14px;}
     .roster-layout{grid-template-columns:1fr;gap:14px;}
+    .classes-layout{grid-template-columns:1fr;gap:14px;}
     .action-row{grid-template-columns:1fr;}
     .stat-cards{grid-template-columns:repeat(2,1fr);}
 
@@ -352,24 +390,25 @@
 <div id="app" style="display:none;">
   <div class="sidebar">
     <div class="brand" id="sidebarBrand">團課教室<span>後台管理系統</span></div>
-    <div class="nav-item active" data-page="overview"><span class="ic">📊</span>總覽與店家設定</div>
+    <div class="sidebar-collapse-toggle" onclick="toggleSidebarCollapse()" title="收合／展開選單"><span class="collapse-ic" id="sidebarCollapseIcon">‹</span><span class="nav-label">收合選單</span></div>
+    <div class="nav-item active" data-page="overview"><span class="ic">📊</span><span class="nav-label">總覽與店家設定</span></div>
 
     <div class="nav-group-title">學員相關</div>
-    <div class="nav-item" data-page="members"><span class="ic">👥</span>學員管理</div>
-    <div class="nav-item" data-page="registrants"><span class="ic">🗂️</span>學員資料</div>
-    <div class="nav-item" data-page="registration"><span class="ic">📝</span>註冊表單設計</div>
+    <div class="nav-item" data-page="members"><span class="ic">👥</span><span class="nav-label">學員管理</span></div>
+    <div class="nav-item" data-page="registrants"><span class="ic">🗂️</span><span class="nav-label">學員資料</span></div>
+    <div class="nav-item" data-page="registration"><span class="ic">📝</span><span class="nav-label">註冊表單設計</span></div>
 
     <div class="nav-group-title">課程相關</div>
-    <div class="nav-item" data-page="roster"><span class="ic">📋</span>每日名單</div>
-    <div class="nav-item" data-page="classes"><span class="ic">🗓️</span>課程設定</div>
-    <div class="nav-item" data-page="popularity"><span class="ic">🔥</span>課程熱門度</div>
+    <div class="nav-item" data-page="roster"><span class="ic">📋</span><span class="nav-label">每日名單</span></div>
+    <div class="nav-item" data-page="classes"><span class="ic">🗓️</span><span class="nav-label">課程設定</span></div>
+    <div class="nav-item" data-page="popularity"><span class="ic">🔥</span><span class="nav-label">課程熱門度</span></div>
 
     <div class="nav-group-title">老師／教練相關</div>
-    <div class="nav-item" data-page="teachers"><span class="ic">🧑‍🏫</span>老師管理</div>
-    <div class="nav-item" data-page="teacherlog"><span class="ic">📈</span>老師教學紀錄</div>
+    <div class="nav-item" data-page="teachers"><span class="ic">🧑‍🏫</span><span class="nav-label">老師管理</span></div>
+    <div class="nav-item" data-page="teacherlog"><span class="ic">📈</span><span class="nav-label">老師教學紀錄</span></div>
 
-    <div class="nav-item" data-page="cashflow" style="margin-top:14px;border-top:1px solid rgba(255,255,255,.12);padding-top:15px;"><span class="ic">💰</span>金流管理</div>
-    <div class="sidebar-bottom"><span class="logout-link" onclick="logout()">🚪 登出</span></div>
+    <div class="nav-item" data-page="cashflow" style="margin-top:14px;border-top:1px solid rgba(255,255,255,.12);padding-top:15px;"><span class="ic">💰</span><span class="nav-label">金流管理</span></div>
+    <div class="sidebar-bottom"><span class="logout-link" onclick="logout()">🚪 <span class="nav-label">登出</span></span></div>
   </div>
 
   <div class="sidebar-backdrop" id="sidebarBackdrop" onclick="closeMobileNav()"></div>
@@ -580,6 +619,22 @@ function pageOverview(){
         </div>
       </div>
       <div class="add-bar"><button class="btn btn-primary" onclick="saveStore()">儲存設定</button></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h3>公告推播</h3></div>
+      <div class="panel-body">
+        <div class="desc" style="margin-bottom:14px;">設定後，學生打開 LINE 預約頁面時會立刻跳出這則公告（例如活動優惠、營業時間異動、停課公告）。關閉後就不會再跳出。</div>
+        <div class="settings-row" style="padding-top:0;">
+          <div><div class="label">啟用公告彈窗</div><div class="desc">開啟後，學生每次打開 app 都會看到這則公告，直到你關閉為止。</div></div>
+          <div class="toggle ${s.announcement_enabled?'on':''}" onclick="toggleAnnouncementEnabled()"><div class="knob"></div></div>
+        </div>
+        <div class="form-grid" style="margin-top:14px;">
+          <div class="field" style="grid-column:1/-1;"><label>公告標題</label><input id="annTitle" value="${s.announcement_title||''}" placeholder="例如：中秋連假停課通知"></div>
+          <div class="field" style="grid-column:1/-1;"><label>公告內容</label><textarea id="annContent" style="min-height:100px;" placeholder="例如：9/26（五）、9/27（六）停課一天，造成不便敬請見諒。">${s.announcement_content||''}</textarea></div>
+        </div>
+      </div>
+      <div class="add-bar"><button class="btn btn-primary" onclick="saveAnnouncement()">儲存並套用</button></div>
     </div>
 
     <div class="panel">
@@ -884,15 +939,26 @@ function pageClasses(){
 
   return `
     <div class="page-title">課程設定</div>
-    <div class="page-sub">管理每週固定課表，並用右邊日曆快速調整單一天的課程內容。</div>
+    <div class="page-sub">用左邊日曆快速調整單一天的課程內容，右邊是目前所有課程範本。</div>
 
-    <div class="two-col-row">
+    <div class="classes-layout">
+    <div class="panel">
+      <div class="panel-head"><h3>課程日曆</h3></div>
+      <div class="panel-body">
+        <div class="desc" style="margin-bottom:12px;">點日期查看那天的課程，可以直接「停開這天」或「只修改這天」（不影響其他星期的固定課表）。</div>
+        <div style="display:grid;grid-template-columns:1.7fr 1fr;gap:20px;align-items:start;">
+          <div>${buildClassesCalendarHTML()}</div>
+          <div style="min-height:120px;">${buildDayDetailHTML()}</div>
+        </div>
+      </div>
+    </div>
+
     <div class="panel">
       <div class="panel-head">
         <h3>目前課程範本</h3>
         <button class="btn btn-primary btn-sm" onclick="toggleAddClassForm()">${formOpen && !editing ? '收起' : '＋ 新增課程'}</button>
       </div>
-      <div class="panel-body pad0">
+      <div class="panel-body pad0" style="overflow-x:auto;">
         <table>
           <thead><tr><th>課程名稱</th><th>授課老師</th><th>地點</th><th>時段</th><th>上課星期</th><th>容納人數</th><th></th></tr></thead>
           <tbody>${rows || '<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:20px;">尚無課程範本，點右上角「＋ 新增課程」開始設定</td></tr>'}</tbody>
@@ -948,17 +1014,6 @@ function pageClasses(){
         </div>
         `}
       </div>`}
-    </div>
-
-    <div class="panel">
-      <div class="panel-head"><h3>課程日曆</h3></div>
-      <div class="panel-body">
-        <div class="desc" style="margin-bottom:12px;">點日期查看那天的課程，可以直接「停開這天」或「只修改這天」（不影響其他星期的固定課表）。</div>
-        <div style="display:grid;grid-template-columns:1.7fr 1fr;gap:20px;align-items:start;">
-          <div>${buildClassesCalendarHTML()}</div>
-          <div style="min-height:120px;">${buildDayDetailHTML()}</div>
-        </div>
-      </div>
     </div>
     </div>
 
@@ -1162,6 +1217,23 @@ async function saveSecurityQA(){
   data.store.security_question = q;
   data.store.security_answer = a;
   showToast('已更新安全問題');
+}
+async function toggleAnnouncementEnabled(){
+  const newVal = !data.store.announcement_enabled;
+  const { error } = await db.from('store_settings').update({ announcement_enabled: newVal }).eq('id', 1);
+  if(error){ showToast('更新失敗'); console.error(error); return; }
+  data.store.announcement_enabled = newVal;
+  render();
+  showToast(newVal ? '已啟用公告彈窗，學生下次打開 app 就會看到' : '已關閉公告彈窗');
+}
+async function saveAnnouncement(){
+  const title = document.getElementById('annTitle').value.trim();
+  const content = document.getElementById('annContent').value.trim();
+  const { error } = await db.from('store_settings').update({ announcement_title: title, announcement_content: content }).eq('id', 1);
+  if(error){ showToast('儲存失敗'); console.error(error); return; }
+  data.store.announcement_title = title;
+  data.store.announcement_content = content;
+  showToast('已儲存公告內容');
 }
 async function saveStore(){
   const name = document.getElementById('stName').value.trim();
@@ -1589,12 +1661,13 @@ async function addCreditsToBatch(lineUserId, amount, expiresAt){
 }
 
 // 金流紀錄（收入／支出）共用寫入函式。amount 一律存正數，type 決定是收入還是支出。
-async function insertTransaction({ type, amount, note, lineUserId, creditBatchId, occurredAt }){
+async function insertTransaction({ type, amount, note, lineUserId, creditBatchId, occurredAt, costType }){
   await db.from('transactions').insert({
     type, amount, note: note || '',
     line_user_id: lineUserId || null,
     credit_batch_id: creditBatchId || null,
-    occurred_at: occurredAt || todayISO(0)
+    occurred_at: occurredAt || todayISO(0),
+    cost_type: type==='expense' ? (costType || null) : null
   });
 }
 async function loadMemberBatches(lineUserId){
@@ -2670,19 +2743,25 @@ function memberMultiOptionsHtml(){
   ).join('');
 }
 
+function onTxTypeChange(){
+  const type = document.getElementById('txType').value;
+  document.getElementById('txCostTypeField').style.display = type==='expense' ? 'block' : 'none';
+}
+
 async function submitManualTransaction(){
   const type = document.getElementById('txType').value;
   const amount = Number(document.getElementById('txAmount').value);
   if(!amount || amount<=0){ showToast('請輸入正確的金額'); return; }
   const occurredAt = document.getElementById('txDate').value || todayISO(0);
+  const costType = type==='expense' ? (document.getElementById('txCostType').value || null) : null;
   const selectedUids = [...document.getElementById('txMember').selectedOptions].map(o=>o.value);
   const note = document.getElementById('txNote').value.trim();
 
   if(selectedUids.length===0){
-    await insertTransaction({ type, amount, note, lineUserId:null, occurredAt });
+    await insertTransaction({ type, amount, note, lineUserId:null, occurredAt, costType });
   } else {
     for(const lineUserId of selectedUids){
-      await insertTransaction({ type, amount, note, lineUserId, occurredAt });
+      await insertTransaction({ type, amount, note, lineUserId, occurredAt, costType });
     }
   }
   await loadCashflowData();
@@ -2692,6 +2771,10 @@ async function submitManualTransaction(){
 
 function startEditTransaction(id){ editingTransactionId = id; render(); }
 function cancelEditTransaction(){ editingTransactionId = null; render(); }
+function onTxEditTypeChange(id){
+  const type = document.getElementById(`txEditType-${id}`).value;
+  document.getElementById(`txEditCostTypeField-${id}`).style.display = type==='expense' ? 'block' : 'none';
+}
 
 async function saveEditTransaction(id){
   const type = document.getElementById(`txEditType-${id}`).value;
@@ -2700,9 +2783,10 @@ async function saveEditTransaction(id){
   const occurredAt = document.getElementById(`txEditDate-${id}`).value;
   const lineUserId = document.getElementById(`txEditMember-${id}`).value || null;
   const note = document.getElementById(`txEditNote-${id}`).value.trim();
+  const costType = type==='expense' ? (document.getElementById(`txEditCostType-${id}`).value || null) : null;
 
   const { error } = await db.from('transactions')
-    .update({ type, amount, occurred_at: occurredAt, line_user_id: lineUserId, note })
+    .update({ type, amount, occurred_at: occurredAt, line_user_id: lineUserId, note, cost_type: costType })
     .eq('id', id);
   if(error){ showToast('更新失敗'); console.error(error); return; }
 
@@ -2720,6 +2804,66 @@ async function deleteTransactionRow(id){
   await loadCashflowData();
   render();
   showToast('已刪除這筆紀錄');
+}
+
+// 最近 6 個月的收入／支出／淨利折線圖，用純 SVG 手繪（不依賴外部圖表套件）
+function buildCashflowTrendChart(records){
+  const now = new Date();
+  const months = [];
+  for(let i=5;i>=0;i--){
+    const d = new Date(now.getFullYear(), now.getMonth()-i, 1);
+    months.push({ key:`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`, label:`${d.getMonth()+1}月` });
+  }
+  const monthlyStats = months.map(m=>{
+    const recs = records.filter(r=>r.occurred_at.startsWith(m.key));
+    const income = recs.filter(r=>r.type==='income').reduce((s,r)=>s+Number(r.amount),0);
+    const expense = recs.filter(r=>r.type==='expense').reduce((s,r)=>s+Number(r.amount),0);
+    return { ...m, income, expense, profit: income-expense };
+  });
+
+  const W = 640, H = 230, padL = 54, padR = 16, padT = 16, padB = 30;
+  const plotW = W - padL - padR, plotH = H - padT - padB;
+  const allValues = monthlyStats.flatMap(m=>[m.income, m.expense, m.profit]);
+  const maxAbs = Math.max(1, ...allValues.map(v=>Math.abs(v)));
+  const hasNegative = allValues.some(v=>v<0);
+  const yMax = maxAbs * 1.15;
+  const yMin = hasNegative ? -yMax : 0;
+  const xStep = monthlyStats.length>1 ? plotW/(monthlyStats.length-1) : 0;
+  const xAt = i => padL + i*xStep;
+  const yAt = v => padT + plotH - ((v-yMin)/(yMax-yMin))*plotH;
+  const pathFor = key => monthlyStats.map((m,i)=> `${i===0?'M':'L'} ${xAt(i).toFixed(1)} ${yAt(m[key]).toFixed(1)}`).join(' ');
+  const zeroY = yAt(0);
+
+  const gridLines = [0,0.25,0.5,0.75,1].map(t=>{
+    const v = yMin + (yMax-yMin)*t;
+    const y = yAt(v);
+    return `<line x1="${padL}" y1="${y.toFixed(1)}" x2="${W-padR}" y2="${y.toFixed(1)}" stroke="var(--line)" stroke-width="1"/>
+      <text x="${padL-8}" y="${(y+3.5).toFixed(1)}" font-size="10" fill="var(--muted)" text-anchor="end">${Math.round(v/1000)}k</text>`;
+  }).join('');
+  const xLabels = monthlyStats.map((m,i)=>`<text x="${xAt(i).toFixed(1)}" y="${H-8}" font-size="11" fill="var(--muted)" text-anchor="middle">${m.label}</text>`).join('');
+  const dotsFor = (key, color) => monthlyStats.map((m,i)=>
+    `<circle cx="${xAt(i).toFixed(1)}" cy="${yAt(m[key]).toFixed(1)}" r="3.5" fill="${color}"><title>${m.label}${key==='income'?'收入':key==='expense'?'支出':'淨利'}：NT$ ${m[key].toLocaleString()}</title></circle>`
+  ).join('');
+
+  return `
+  <div style="overflow-x:auto;">
+    <svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:${W}px;height:auto;display:block;">
+      ${gridLines}
+      <line x1="${padL}" y1="${zeroY.toFixed(1)}" x2="${W-padR}" y2="${zeroY.toFixed(1)}" stroke="var(--ink)" stroke-width="1" opacity=".25"/>
+      <path d="${pathFor('income')}" fill="none" stroke="var(--sage)" stroke-width="2.5"/>
+      <path d="${pathFor('expense')}" fill="none" stroke="var(--danger)" stroke-width="2.5"/>
+      <path d="${pathFor('profit')}" fill="none" stroke="var(--clay)" stroke-width="2.5" stroke-dasharray="5,3"/>
+      ${dotsFor('income','var(--sage)')}
+      ${dotsFor('expense','var(--danger)')}
+      ${dotsFor('profit','var(--clay)')}
+      ${xLabels}
+    </svg>
+  </div>
+  <div style="display:flex;gap:18px;justify-content:center;margin-top:6px;font-size:12px;flex-wrap:wrap;color:var(--muted);">
+    <span style="display:flex;align-items:center;gap:5px;"><span style="width:14px;height:3px;background:var(--sage);display:inline-block;border-radius:2px;"></span>收入</span>
+    <span style="display:flex;align-items:center;gap:5px;"><span style="width:14px;height:3px;background:var(--danger);display:inline-block;border-radius:2px;"></span>支出</span>
+    <span style="display:flex;align-items:center;gap:5px;"><span style="width:14px;height:3px;background:var(--clay);display:inline-block;border-radius:2px;"></span>淨利</span>
+  </div>`;
 }
 
 function pageCashflow(){
@@ -2743,6 +2887,11 @@ function pageCashflow(){
   const filteredExpense = sumByType(filtered, 'expense');
   const hasFilter = cashflowFilterStart || cashflowFilterEnd;
 
+  const fixedCostTotal = filtered.filter(r=>r.type==='expense' && r.cost_type==='fixed').reduce((s,r)=>s+Number(r.amount),0);
+  const variableCostTotal = filtered.filter(r=>r.type==='expense' && r.cost_type==='variable').reduce((s,r)=>s+Number(r.amount),0);
+  const uncategorizedCostTotal = Math.max(0, filteredExpense - fixedCostTotal - variableCostTotal);
+  const costTypeLabel = { fixed:'固定成本', variable:'變動成本' };
+
   const rows = filtered.map(r=>{
     const isEditing = editingTransactionId === r.id;
     if(isEditing){
@@ -2750,13 +2899,21 @@ function pageCashflow(){
         <td colspan="6">
           <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:end;padding:8px 0;">
             <div class="field" style="width:auto;"><label>類型</label>
-              <select id="txEditType-${r.id}" style="width:90px;">
+              <select id="txEditType-${r.id}" style="width:90px;" onchange="onTxEditTypeChange('${r.id}')">
                 <option value="income" ${r.type==='income'?'selected':''}>收入</option>
                 <option value="expense" ${r.type==='expense'?'selected':''}>支出</option>
               </select>
             </div>
             <div class="field" style="width:auto;"><label>日期</label><input id="txEditDate-${r.id}" type="date" value="${r.occurred_at}"></div>
             <div class="field" style="width:auto;"><label>金額</label><input id="txEditAmount-${r.id}" type="number" min="0" value="${r.amount}" style="width:100px;"></div>
+            <div class="field" style="width:auto;" id="txEditCostTypeField-${r.id}" ${r.type!=='expense'?'style="display:none;width:auto;"':''}>
+              <label>成本類型</label>
+              <select id="txEditCostType-${r.id}">
+                <option value="" ${!r.cost_type?'selected':''}>不分類</option>
+                <option value="fixed" ${r.cost_type==='fixed'?'selected':''}>固定成本</option>
+                <option value="variable" ${r.cost_type==='variable'?'selected':''}>變動成本</option>
+              </select>
+            </div>
             <div class="field" style="width:auto;"><label>學員（選填）</label><select id="txEditMember-${r.id}">${memberOptionsHtml(r.line_user_id)}</select></div>
             <div class="field" style="width:auto;"><label>備註</label><input id="txEditNote-${r.id}" value="${r.note||''}" style="width:160px;"></div>
             <button class="btn btn-ghost btn-sm" onclick="cancelEditTransaction()">取消</button>
@@ -2768,7 +2925,7 @@ function pageCashflow(){
     return `
     <tr>
       <td>${r.occurred_at}</td>
-      <td><span class="tag ${r.type==='income'?'on':'off'}">${r.type==='income'?'收入':'支出'}</span></td>
+      <td><span class="tag ${r.type==='income'?'on':'off'}">${r.type==='income'?'收入':'支出'}</span>${r.type==='expense' && r.cost_type ? ` <span class="tag warn">${costTypeLabel[r.cost_type]||''}</span>` : ''}</td>
       <td>${r.line_user_id ? memberName(r.line_user_id) : '—'}</td>
       <td style="color:${r.type==='income'?'var(--sage-dark)':'var(--danger)'};font-weight:700;">${r.type==='income'?'+':'－'}NT$ ${Number(r.amount).toLocaleString()}</td>
       <td>${r.note || '—'}</td>
@@ -2803,19 +2960,50 @@ function pageCashflow(){
       <div class="stat-card"><div class="num">NT$ ${(filteredIncome-filteredExpense).toLocaleString()}</div><div class="lbl">${hasFilter ? '篩選區間淨利' : '全部總淨利'}</div></div>
     </div>
 
+    <div class="panel">
+      <div class="panel-head"><h3>近 6 個月收支趨勢</h3></div>
+      <div class="panel-body">${buildCashflowTrendChart(cashflowRecords)}</div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h3>成本結構${hasFilter ? '（篩選區間）' : '（全部）'}</h3></div>
+      <div class="panel-body">
+        <div class="desc" style="margin-bottom:12px;">固定成本＝不管有沒有開課都要付的費用（例如場地租金、保險、月費訂閱）；變動成本＝隨開課量變動的費用（例如老師鐘點費、消耗品、單堂場地費）。掌握成本結構可以幫助你抓出「至少要賺多少才打平」的損益兩平點——固定成本佔比越高，代表開課量下滑時的風險越大。</div>
+        ${filteredExpense===0 ? '<div style="color:var(--muted);font-size:12.5px;">這段區間還沒有支出紀錄</div>' : `
+        <div style="display:flex;height:26px;border-radius:8px;overflow:hidden;margin-bottom:10px;">
+          ${fixedCostTotal>0 ? `<div style="width:${(fixedCostTotal/filteredExpense*100)}%;background:var(--danger);" title="固定成本 NT$ ${fixedCostTotal.toLocaleString()}"></div>` : ''}
+          ${variableCostTotal>0 ? `<div style="width:${(variableCostTotal/filteredExpense*100)}%;background:var(--clay);" title="變動成本 NT$ ${variableCostTotal.toLocaleString()}"></div>` : ''}
+          ${uncategorizedCostTotal>0 ? `<div style="width:${(uncategorizedCostTotal/filteredExpense*100)}%;background:var(--line);" title="未分類 NT$ ${uncategorizedCostTotal.toLocaleString()}"></div>` : ''}
+        </div>
+        <div style="display:flex;gap:18px;flex-wrap:wrap;font-size:12.5px;">
+          <span>🔴 固定成本：NT$ ${fixedCostTotal.toLocaleString()}（${Math.round(fixedCostTotal/filteredExpense*100)}%）</span>
+          <span>🟠 變動成本：NT$ ${variableCostTotal.toLocaleString()}（${Math.round(variableCostTotal/filteredExpense*100)}%）</span>
+          ${uncategorizedCostTotal>0 ? `<span style="color:var(--muted);">⚪ 未分類：NT$ ${uncategorizedCostTotal.toLocaleString()}（${Math.round(uncategorizedCostTotal/filteredExpense*100)}%）</span>` : ''}
+        </div>`}
+      </div>
+    </div>
+
     <div class="two-col-row">
       <div class="panel" style="display:flex;flex-direction:column;">
         <div class="panel-head"><h3>手動新增一筆收入／支出</h3></div>
         <div class="panel-body">
           <div class="form-grid">
             <div class="field"><label>類型</label>
-              <select id="txType">
+              <select id="txType" onchange="onTxTypeChange()">
                 <option value="income">收入</option>
                 <option value="expense">支出</option>
               </select>
             </div>
             <div class="field"><label>金額（NT$）</label><input id="txAmount" type="number" min="0" placeholder="例如：3000"></div>
             <div class="field"><label>日期</label><input id="txDate" type="date" value="${todayISO(0)}"></div>
+            <div class="field" id="txCostTypeField" style="display:none;">
+              <label>成本類型</label>
+              <select id="txCostType">
+                <option value="">不分類</option>
+                <option value="fixed">固定成本（不管有沒有開課都要付，例如場地租金、保險、月費）</option>
+                <option value="variable">變動成本（隨開課量變動，例如老師鐘點費、消耗品）</option>
+              </select>
+            </div>
             <div class="field" style="grid-column:1/-1;">
               <label>學員（選填，可多選，通常收入才會指定；按住 Cmd／Ctrl 可複選）</label>
               <select id="txMember" multiple size="5" style="height:auto;">${memberMultiOptionsHtml()}</select>
@@ -3054,12 +3242,10 @@ function pageRegistration(){
       <div class="q-order" style="visibility:hidden;"><button>▲</button><button>▼</button></div>
       <div class="q-main">
         <div class="q-text">${f.label}</div>
-        <div class="q-meta"><span class="tag off">固定欄位</span></div>
-      </div>
-      <div class="q-actions">
-        <label style="display:flex;align-items:center;gap:5px;font-size:11.5px;color:var(--muted);cursor:pointer;white-space:nowrap;" title="顯示／隱藏">
-          <div class="toggle ${f.shown?'on':''}" onclick="${f.toggleFn}()"><div class="knob"></div></div>顯示
-        </label>
+        <div class="q-meta" style="margin-top:6px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+          <span class="tag off">固定欄位</span>
+          <button class="tag-btn ${f.shown?'on':'off'}" onclick="${f.toggleFn}()">${f.shown?'顯示中':'已隱藏'}</button>
+        </div>
       </div>
     </div>`).join('');
 
@@ -3081,21 +3267,15 @@ function pageRegistration(){
         </div>
         <div class="q-main">
           <div class="q-text">${q.question}</div>
-          <div class="q-meta">
+          <div class="q-meta" style="margin-top:6px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
             <span class="tag ${q.type==='choice'?'on':'off'}">${q.type==='choice' ? '單選：'+(q.options||[]).join('、') : '簡答'}</span>
-            <span class="tag ${q.active?'on':'off'}" style="margin-left:6px;">${q.active?'顯示中':'已隱藏'}</span>
-            <span class="tag ${q.required?'warn':'off'}" style="margin-left:6px;">${q.required?'必填':'選填'}</span>
+            <button class="tag-btn ${q.active?'on':'off'}" onclick="toggleRegQuestionActive('${q.id}')">${q.active?'顯示中':'已隱藏'}</button>
+            <button class="tag-btn ${q.required?'warn':'off'}" onclick="toggleRegQuestionRequired('${q.id}')">${q.required?'必填':'選填'}</button>
+            <div style="margin-left:auto;display:flex;gap:6px;">
+              <button class="btn btn-ghost btn-sm" onclick="startEditRegQuestion('${q.id}')">編輯</button>
+              <button class="btn btn-danger btn-sm" onclick="deleteRegQuestion('${q.id}')">刪除</button>
+            </div>
           </div>
-        </div>
-        <div class="q-actions">
-          <label style="display:flex;align-items:center;gap:5px;font-size:11.5px;color:var(--muted);cursor:pointer;white-space:nowrap;" title="必填">
-            <div class="toggle ${q.required?'on':''}" onclick="toggleRegQuestionRequired('${q.id}')"><div class="knob"></div></div>必填
-          </label>
-          <label style="display:flex;align-items:center;gap:5px;font-size:11.5px;color:var(--muted);cursor:pointer;white-space:nowrap;" title="顯示／隱藏">
-            <div class="toggle ${q.active?'on':''}" onclick="toggleRegQuestionActive('${q.id}')"><div class="knob"></div></div>顯示
-          </label>
-          <button class="btn btn-ghost btn-sm" onclick="startEditRegQuestion('${q.id}')">編輯</button>
-          <button class="btn btn-danger btn-sm" onclick="deleteRegQuestion('${q.id}')">刪除</button>
         </div>
       </div>`;
   }).join('');
@@ -3197,11 +3377,15 @@ function saveRegistrantColumnPrefs(order){
   localStorage.setItem(REGISTRANTS_COLUMNS_KEY, JSON.stringify(order));
 }
 function moveRegistrantColumn(key, dir){
+  // 只在「目前顯示中」的欄位之間移動位置，跳過隱藏的欄位
   const order = loadRegistrantColumnPrefs();
-  const idx = order.findIndex(o=>o.key===key);
-  const swapIdx = idx+dir;
-  if(idx<0 || swapIdx<0 || swapIdx>=order.length) return;
-  [order[idx], order[swapIdx]] = [order[swapIdx], order[idx]];
+  const visibleIdxs = order.map((o,i)=>o.visible?i:-1).filter(i=>i>=0);
+  const posInVisible = visibleIdxs.findIndex(i=>order[i].key===key);
+  const targetPos = posInVisible + dir;
+  if(posInVisible<0 || targetPos<0 || targetPos>=visibleIdxs.length) return;
+  const idxA = visibleIdxs[posInVisible];
+  const idxB = visibleIdxs[targetPos];
+  [order[idxA], order[idxB]] = [order[idxB], order[idxA]];
   saveRegistrantColumnPrefs(order);
   render();
 }
@@ -3226,6 +3410,12 @@ function registrantCellValue(m, field){
   return '—';
 }
 
+let registrantColumnPickerOpen = false;
+function toggleRegistrantColumnPicker(){
+  registrantColumnPickerOpen = !registrantColumnPickerOpen;
+  render();
+}
+
 function pageRegistrants(){
   const registered = [...data.members].filter(m=>m.registration_submitted_at)
     .sort((a,b)=> new Date(b.registration_submitted_at) - new Date(a.registration_submitted_at));
@@ -3234,23 +3424,12 @@ function pageRegistrants(){
   const fields = registrantFieldDefs();
   const columnOrder = loadRegistrantColumnPrefs();
   const visibleFields = columnOrder.filter(c=>c.visible).map(c=>fields.find(f=>f.key===c.key)).filter(Boolean);
+  const visibleCount = columnOrder.filter(c=>c.visible).length;
 
-  const columnConfigRows = columnOrder.map((c,i)=>{
+  const columnPickerItems = columnOrder.map(c=>{
     const field = fields.find(f=>f.key===c.key);
     if(!field) return '';
-    return `
-      <div class="q-row">
-        <div class="q-order">
-          <button onclick="moveRegistrantColumn('${c.key}',-1)" ${i===0?'disabled':''}>▲</button>
-          <button onclick="moveRegistrantColumn('${c.key}',1)" ${i===columnOrder.length-1?'disabled':''}>▼</button>
-        </div>
-        <div class="q-main"><div class="q-text">${field.label}</div></div>
-        <div class="q-actions">
-          <label style="display:flex;align-items:center;gap:5px;font-size:11.5px;color:var(--muted);cursor:pointer;white-space:nowrap;" title="顯示／隱藏">
-            <div class="toggle ${c.visible?'on':''}" onclick="toggleRegistrantColumn('${c.key}')"><div class="knob"></div></div>顯示
-          </label>
-        </div>
-      </div>`;
+    return `<label class="col-picker-item"><input type="checkbox" ${c.visible?'checked':''} onchange="toggleRegistrantColumn('${c.key}')">${field.label}</label>`;
   }).join('');
 
   const rows = registered.map(m=>`
@@ -3268,17 +3447,21 @@ function pageRegistrants(){
     </div>
 
     <div class="panel">
-      <div class="panel-head"><h3>欄位設定</h3></div>
-      <div class="page-sub" style="margin:0 0 10px;padding:0 20px;">勾選要在下方表格顯示的欄位，用 ▲▼ 調整顯示順序（包含每一題註冊問題的答案）。</div>
-      <div class="panel-body pad0">${columnConfigRows}</div>
-    </div>
-
-    <div class="panel">
       <div class="panel-head"><h3>已註冊學員</h3></div>
+      <div class="panel-body" style="padding-bottom:0;">
+        <div style="position:relative;display:inline-block;">
+          <button class="btn btn-ghost btn-sm" onclick="toggleRegistrantColumnPicker()">🔧 欄位顯示設定（已選 ${visibleCount}） ${registrantColumnPickerOpen?'▲':'▼'}</button>
+          ${registrantColumnPickerOpen ? `<div class="col-picker-dropdown">${columnPickerItems}</div>` : ''}
+        </div>
+        <div class="desc" style="margin-top:8px;">勾選要顯示的欄位；欄位順序可以直接在下面表格的標題上用 ▲▼ 調整。</div>
+      </div>
       <div class="panel-body pad0" style="overflow-x:auto;">
         ${visibleFields.length===0
-          ? '<div style="text-align:center;color:var(--muted);padding:24px;">目前所有欄位都被隱藏了，請到上面「欄位設定」至少開啟一個欄位</div>'
-          : `<table><thead><tr>${visibleFields.map(f=>`<th>${f.label}</th>`).join('')}<th></th></tr></thead>
+          ? '<div style="text-align:center;color:var(--muted);padding:24px;">目前所有欄位都被隱藏了，請點上面「欄位顯示設定」至少勾選一個欄位</div>'
+          : `<table><thead><tr>${visibleFields.map((f,i)=>`<th><span>${f.label}</span><span class="th-order">
+              <button onclick="moveRegistrantColumn('${f.key}',-1)" ${i===0?'disabled':''} title="往前移">▲</button>
+              <button onclick="moveRegistrantColumn('${f.key}',1)" ${i===visibleFields.length-1?'disabled':''} title="往後移">▼</button>
+            </span></th>`).join('')}<th></th></tr></thead>
         <tbody>${rows || `<tr><td colspan="${visibleFields.length+1}" style="text-align:center;color:var(--muted);padding:24px;">目前還沒有學員填寫過會員註冊表單</td></tr>`}</tbody></table>`}
       </div>
     </div>`;
@@ -3299,6 +3482,18 @@ function openMobileNav(){
 function closeMobileNav(){
   document.querySelector('.sidebar').classList.remove('open');
   document.getElementById('sidebarBackdrop').classList.remove('show');
+}
+
+const SIDEBAR_COLLAPSED_KEY = 'admin-sidebar-collapsed-v1';
+function applySidebarCollapsedState(){
+  const collapsed = localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === '1';
+  document.querySelector('.sidebar').classList.toggle('collapsed', collapsed);
+}
+function toggleSidebarCollapse(){
+  const sb = document.querySelector('.sidebar');
+  const collapsed = !sb.classList.contains('collapsed');
+  sb.classList.toggle('collapsed', collapsed);
+  localStorage.setItem(SIDEBAR_COLLAPSED_KEY, collapsed ? '1' : '0');
 }
 
 const CURRENT_PAGE_KEY = 'admin-current-page-v1';
@@ -3334,6 +3529,7 @@ function tryLogin(){
     localStorage.setItem(SESSION_KEY, '1'); // 記住這台裝置已登入，重新整理不用再輸入密碼
     document.getElementById('loginScreen').style.display = 'none';
     document.getElementById('app').style.display = 'flex';
+    applySidebarCollapsedState();
     render();
   } else {
     err.textContent = '密碼錯誤，請再試一次';
@@ -3406,6 +3602,7 @@ async function resetPasswordViaForgot(){
     // 這台裝置先前登入過，不用再輸入密碼，直接進畫面
     document.getElementById('loginScreen').style.display = 'none';
     document.getElementById('app').style.display = 'flex';
+    applySidebarCollapsedState();
     const savedPage = localStorage.getItem(CURRENT_PAGE_KEY) || 'overview';
     await navigateToPage(savedPage); // 回到重新整理前所在的那一頁
   } else {
