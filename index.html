@@ -293,6 +293,7 @@
 
   .two-col-row{display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:stretch;}
   .roster-layout{display:grid;grid-template-columns:2fr 1fr;gap:20px;align-items:start;}
+  .classes-calendar-row{display:grid;grid-template-columns:2fr 1fr;gap:20px;align-items:start;}
 
   /* ---- 手機版選單開關（桌面版預設隱藏） ---- */
   .mobile-topbar{display:none;}
@@ -328,6 +329,7 @@
     .form-grid{grid-template-columns:1fr;}
     .two-col-row{grid-template-columns:1fr;gap:14px;}
     .roster-layout{grid-template-columns:1fr;gap:14px;}
+    .classes-calendar-row{grid-template-columns:1fr;gap:14px;}
     .action-row{grid-template-columns:1fr;}
     .stat-cards{grid-template-columns:repeat(2,1fr);}
 
@@ -399,7 +401,7 @@
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M15 5l-7 7 7 7" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </span>
     </div>
-    <div class="nav-item active" data-page="overview"><span class="ic">📊</span><span class="nav-label">總覽與店家設定</span></div>
+    <div class="nav-item active" data-page="overview"><span class="ic">📊</span><span class="nav-label">店家與安全設定</span></div>
     <div class="nav-item" data-page="announcement"><span class="ic">📢</span><span class="nav-label">公告推播</span></div>
 
     <div class="nav-group-title">學員相關</div>
@@ -590,7 +592,7 @@ function showToast(msg){
 let currentPage = 'overview';
 const WEEKDAYS = ['一','二','三','四','五','六','日'];
 
-/* ================= 總覽與店家設定 ================= */
+/* ================= 店家與安全設定 ================= */
 function pageOverview(){
   const activeClasses = data.classes.filter(c=>c.active).length;
   const s = data.store;
@@ -602,7 +604,7 @@ function pageOverview(){
     </div>`).join('');
 
   return `
-    <div class="page-title">總覽與店家設定</div>
+    <div class="page-title">店家與安全設定</div>
     <div class="page-sub">這裡是後台管理員（老師／店家）看到的畫面，資料會即時同步到學生端的 LINE 介面。店家名稱會顯示在學生端 LINE 介面頂部，以及後台左側選單。</div>
     <div class="stat-cards" style="grid-template-columns:repeat(3,1fr);">
       <div class="stat-card"><div class="num">${activeClasses}</div><div class="lbl">上架中課程範本</div></div>
@@ -634,7 +636,6 @@ function pageOverview(){
     <div class="panel">
       <div class="panel-head"><h3>登入密碼</h3></div>
       <div class="panel-body">
-        <div class="hint-box">🔑 這組密碼存在資料庫裡，不管在哪台裝置登入後台都是同一組。建議定期更換，且不要跟其他平台密碼相同。</div>
         <div class="form-grid">
           <div class="field"><label>新密碼</label><input id="stNewPw" type="password" placeholder="至少 6 碼"></div>
           <div class="field"><label>再次輸入新密碼</label><input id="stNewPw2" type="password" placeholder="請再輸入一次"></div>
@@ -1019,7 +1020,7 @@ function pageClasses(){
       </div>`}
     </div>
 
-    ${exceptionPanelHtml ? `<div class="two-col-row">${classCalendarPanelHtml}${exceptionPanelHtml}</div>` : classCalendarPanelHtml}
+    ${exceptionPanelHtml ? `<div class="classes-calendar-row">${classCalendarPanelHtml}${exceptionPanelHtml}</div>` : classCalendarPanelHtml}
 
     <div class="two-col-row">
     <div class="panel">
@@ -3296,6 +3297,25 @@ async function unpublishRegistrationForm(){
   showToast('已停用，改回草稿狀態');
 }
 
+// 姓名／e-mail 是真正寫死的固定欄位；生日／年紀則是「預設欄位」——
+// 本質上還是 registration_questions 裡的一筆資料，只是固定會出現、用同樣的灰色標籤呈現，
+// 這樣才不用另外改資料庫欄位、也不會影響「年紀」這題原本已經收集到的答案。
+const DEFAULT_REG_QUESTIONS = [
+  { question:'生日', type:'date' },
+  { question:'年紀', type:'text' }
+];
+async function ensureDefaultRegQuestions(){
+  const missing = DEFAULT_REG_QUESTIONS.filter(w => !registrationQuestions.some(q=>q.question===w.question));
+  if(missing.length===0) return;
+  const maxOrder = registrationQuestions.length>0 ? Math.max(...registrationQuestions.map(q=>q.sort_order)) : -1;
+  for(let i=0;i<missing.length;i++){
+    await db.from('registration_questions').insert({
+      question: missing[i].question, type: missing[i].type, sort_order: maxOrder+1+i, active:true, required:false, options:[]
+    });
+  }
+  await loadAdminState();
+}
+
 function onNewRegQTypeChange(){
   const type = document.getElementById('newRegQType').value;
   document.getElementById('newRegQOptionsField').style.display = (type==='choice'||type==='multichoice') ? 'block' : 'none';
@@ -3362,11 +3382,12 @@ async function deleteRegQuestion(id){
   showToast('已刪除');
 }
 async function moveRegQuestion(id, delta){
-  const idx = registrationQuestions.findIndex(x=>x.id===id);
+  // 生日／年紀是固定顯示在最前面的「預設欄位」，不列入排序，只在其餘的自訂問題之間移動
+  const otherQuestions = registrationQuestions.filter(q=>q.question!=='生日' && q.question!=='年紀');
+  const idx = otherQuestions.findIndex(x=>x.id===id);
   const newIdx = idx + delta;
-  if(newIdx<0 || newIdx>=registrationQuestions.length) return;
-  const a = registrationQuestions[idx], b = registrationQuestions[newIdx];
-  [registrationQuestions[idx], registrationQuestions[newIdx]] = [b, a];
+  if(idx<0 || newIdx<0 || newIdx>=otherQuestions.length) return;
+  const a = otherQuestions[idx], b = otherQuestions[newIdx];
   await Promise.all([
     db.from('registration_questions').update({ sort_order: b.sort_order }).eq('id', a.id),
     db.from('registration_questions').update({ sort_order: a.sort_order }).eq('id', b.id)
@@ -3449,25 +3470,41 @@ async function toggleRegistrationShowContact(){
 function pageRegistration(){
   const isPublished = data.store.registration_form_status==='published';
 
-  // 固定欄位（姓名／e-mail）跟自訂問題放在同一個列表最前面，只能切換顯示／隱藏，
-  // 不能排序、編輯或刪除——它們不是 registration_questions 裡的資料。
-  const fixedFields = [
-    { key:'name', label:'姓名', shown: data.store.registration_show_name!==false, toggleFn:'toggleRegistrationShowName' },
-    { key:'contact', label:'e-mail', shown: data.store.registration_show_contact!==false, toggleFn:'toggleRegistrationShowContact' }
-  ];
-  const fixedFieldRows = fixedFields.map(f=>`
+  // 姓名／e-mail 是寫死的固定欄位；生日／年紀是「預設欄位」（本質上是 registration_questions
+  // 裡的一筆資料，只是固定顯示在最前面、用同樣的灰色標籤呈現）。順序固定為：姓名、生日、e-mail、年紀。
+  const birthdayQ = registrationQuestions.find(q=>q.question==='生日');
+  const ageQ = registrationQuestions.find(q=>q.question==='年紀');
+  const buildFixedFieldRow = f => `
     <div class="q-row">
       <div class="q-order" style="visibility:hidden;"><button>▲</button><button>▼</button></div>
       <div class="q-main">
         <div class="q-text">${f.label}</div>
         <div class="q-meta" style="margin-top:6px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
-          <span class="tag off">固定欄位</span>
+          <span class="tag off">預設欄位</span>
           <button class="tag-btn ${f.shown?'on':'off'}" onclick="${f.toggleFn}()">${f.shown?'顯示中':'已隱藏'}</button>
         </div>
       </div>
-    </div>`).join('');
+    </div>`;
+  const buildPromotedDefaultRow = q => `
+    <div class="q-row">
+      <div class="q-order" style="visibility:hidden;"><button>▲</button><button>▼</button></div>
+      <div class="q-main">
+        <div class="q-text">${q.question}</div>
+        <div class="q-meta" style="margin-top:6px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+          <span class="tag off">預設欄位</span>
+          <button class="tag-btn ${q.active?'on':'off'}" onclick="toggleRegQuestionActive('${q.id}')">${q.active?'顯示中':'已隱藏'}</button>
+        </div>
+      </div>
+    </div>`;
+  const fixedFieldRows = [
+    buildFixedFieldRow({ label:'姓名', shown: data.store.registration_show_name!==false, toggleFn:'toggleRegistrationShowName' }),
+    birthdayQ ? buildPromotedDefaultRow(birthdayQ) : '',
+    buildFixedFieldRow({ label:'e-mail', shown: data.store.registration_show_contact!==false, toggleFn:'toggleRegistrationShowContact' }),
+    ageQ ? buildPromotedDefaultRow(ageQ) : ''
+  ].join('');
 
-  const rows = registrationQuestions.map((q,i)=>{
+  const otherQuestions = registrationQuestions.filter(q=>q.question!=='生日' && q.question!=='年紀');
+  const rows = otherQuestions.map((q,i)=>{
     const isEditing = editingRegQuestionId===q.id;
     if(isEditing){
       return `
@@ -3596,8 +3633,10 @@ function registrantFieldDefs(){
     { key:'display_name', label:'學員（LINE 顯示名稱）' },
     { key:'registration_name', label:'姓名' }
   ];
-  const ageQ = registrationQuestions.find(q=>q.question==='年紀');
-  if(ageQ) fields.push({ key:'q_'+ageQ.id, label:'年紀', qid:ageQ.id });
+  // 每一題蒐集到的註冊問題答案都可以選擇顯示
+  registrationQuestions.forEach(q=>{
+    fields.push({ key:'q_'+q.id, label:q.question, qid:q.id });
+  });
   fields.push({ key:'registration_contact', label:'e-mail' });
   fields.push({ key:'registration_submitted_at', label:'填寫時間' });
   return fields;
@@ -3768,6 +3807,7 @@ async function navigateToPage(page){
   if(page==='teacherlog'){ await loadTeacherLog(teacherLogSelected || (data.teachers[0] && data.teachers[0].name) || ''); }
   if(page==='cashflow'){ await loadCashflowData(); }
   if(page==='popularity'){ await loadPopularityData(); }
+  if(page==='registration'){ await ensureDefaultRegQuestions(); }
   render();
 }
 
