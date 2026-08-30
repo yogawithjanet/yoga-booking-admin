@@ -105,6 +105,7 @@
   .tag.off{background:#f1efe8;color:var(--muted);}
   .tag.warn{background:#fdf1d0;color:#8a6a1f;}
   .row-actions{display:flex;gap:6px;justify-content:flex-end;}
+  .member-row-actions{display:contents;}
   .avatar-sm{width:26px;height:26px;border-radius:50%;background:linear-gradient(135deg,var(--sage),var(--clay));display:inline-flex;align-items:center;justify-content:center;color:#fff;font-size:11px;font-weight:700;margin-right:8px;}
 
   .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
@@ -377,7 +378,7 @@
     .q-row{flex-wrap:wrap;}
     .q-actions{flex-wrap:wrap;row-gap:6px;}
     .row-actions{flex-wrap:wrap;justify-content:flex-start;}
-    .member-row-actions{display:none;} /* 學員列表的操作按鈕（查看/管理、+1、-1、到期日期、確認、刪除）手機版只留電腦版 */
+    .member-row-actions{display:none;} /* 學員列表的操作按鈕（+1、-1、到期日期、確認、刪除）手機版只留電腦版；「詳細資訊」按鈕不在這個 span 裡，兩版都顯示 */
 
     .tag-manage-list{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}
 
@@ -1626,8 +1627,9 @@ function pageMembers(){
       <td><b>${m.remaining_credits}</b> 堂</td>
       <td>${recentCount} 堂</td>
       <td>
-        <div class="row-actions member-row-actions" style="flex-wrap:wrap;justify-content:flex-end;">
-          <button class="btn btn-ghost btn-sm" onclick="runCreditAction(()=>openMemberDetail('${m.line_user_id}'))">查看／管理</button>
+        <div class="row-actions" style="flex-wrap:wrap;justify-content:flex-end;">
+          <button class="btn btn-ghost btn-sm" onclick="runCreditAction(()=>openMemberDetail('${m.line_user_id}'))">詳細資訊</button>
+          <span class="member-row-actions">
           <button class="btn btn-ghost btn-sm" onclick="runCreditAction(()=>adjustMember('${m.line_user_id}', 1))">＋1</button>
           <button class="btn btn-ghost btn-sm" onclick="runCreditAction(()=>adjustMember('${m.line_user_id}', -1))">－1</button>
           <input type="number" id="setCredits-${m.line_user_id}" placeholder="輸入數字" style="width:70px;border:1px solid var(--line);border-radius:8px;padding:5px 8px;font-size:12.5px;">
@@ -1637,6 +1639,7 @@ function pageMembers(){
           </div>
           <button class="btn btn-primary btn-sm" onclick="runCreditAction(()=>setMemberCredits('${m.line_user_id}'))">確認</button>
           <button class="btn btn-danger btn-sm" onclick="deleteMember('${m.line_user_id}')">刪除</button>
+          </span>
         </div>
       </td>
     </tr>`;
@@ -1644,7 +1647,7 @@ function pageMembers(){
 
   return `
     <div class="page-title">學員管理</div>
-    <div class="page-sub">學員會在<b>第一次透過 LINE 打開預約頁面後</b>自動出現在這份名單裡，你不需要手動新增。點「查看／管理」可以看到選課歷史、堂數批次明細。在下方列表打勾可以選取多位學員，套用到「批次加堂數」「批次選課」。</div>
+    <div class="page-sub">學員會在<b>第一次透過 LINE 打開預約頁面後</b>自動出現在這份名單裡，你不需要手動新增。點「詳細資訊」可以看到選課歷史、堂數批次明細。在下方列表打勾可以選取多位學員，套用到「批次加堂數」「批次選課」。</div>
 
     <div class="action-row">
       <div class="action-card">
@@ -3766,7 +3769,7 @@ function pageRegistration(){
 
   return `
     <div class="page-title">註冊表單設計</div>
-    <div class="page-sub">設定「會員註冊」表單要收集的問題。啟用後，新學員第一次打開前台會直接看到這份表單；已註冊學員可以隨時從「會員資料設定」查看或修改自己填過的答案。每位學員填過的答案，會顯示在「學員管理 → 查看／管理」裡。</div>
+    <div class="page-sub">設定「會員註冊」表單要收集的問題。啟用後，新學員第一次打開前台會直接看到這份表單；已註冊學員可以隨時從「會員資料設定」查看或修改自己填過的答案。每位學員填過的答案，會顯示在「學員管理 → 詳細資訊」裡。</div>
 
     <div class="panel" style="border-color:${isPublished?'var(--sage)':'var(--clay)'};">
       <div class="panel-body" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">
