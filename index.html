@@ -3794,7 +3794,8 @@ function pageRegistration(){
       </div>
     </div>
 
-    <div class="two-col-row">
+    <div class="two-col-row" style="align-items:start;">
+    <div style="display:flex;flex-direction:column;gap:20px;">
     <div class="panel">
       <div class="panel-head"><h3>新增問題</h3></div>
       <div class="panel-body">
@@ -3827,12 +3828,6 @@ function pageRegistration(){
     </div>
 
     <div class="panel">
-      <div class="panel-head"><h3>目前的問題（照這個順序顯示在表單上）</h3></div>
-      <div class="panel-body pad0">${allFieldRows}</div>
-    </div>
-    </div>
-
-    <div class="panel">
       <div class="panel-head"><h3>「編輯我的會員資料」頁面說明文字</h3></div>
       <div class="panel-body">
         <div class="field">
@@ -3841,6 +3836,13 @@ function pageRegistration(){
         </div>
       </div>
       <div class="add-bar"><button class="btn btn-primary btn-sm" onclick="saveEditProfileNote()">💾 儲存</button></div>
+    </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h3>目前的問題（照這個順序顯示在表單上）</h3></div>
+      <div class="panel-body pad0">${allFieldRows}</div>
+    </div>
     </div>`;
 }
 
