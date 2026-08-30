@@ -3663,6 +3663,13 @@ async function toggleRegistrationContactRequired(){
   data.store.registration_contact_required = newVal;
   render();
 }
+async function saveEditProfileNote(){
+  const val = document.getElementById('editProfileNoteInput').value;
+  const { error } = await db.from('store_settings').update({ edit_profile_note: val }).eq('id', 1);
+  if(error){ showToast('儲存失敗'); console.error(error); return; }
+  data.store.edit_profile_note = val;
+  showToast('已儲存');
+}
 
 function buildRegFieldOrderControls(key, isFirst, isLast){
   return `
@@ -3785,6 +3792,15 @@ function pageRegistration(){
           }
         </div>
       </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h3>「編輯我的會員資料」頁面說明文字</h3></div>
+      <div class="panel-body">
+        <div class="desc" style="margin-bottom:10px;">已註冊學員從「會員資料設定」進來修改自己資料時，最上面可以顯示這段提示文字（選填，留空就不顯示）。</div>
+        <textarea id="editProfileNoteInput" style="min-height:70px;" placeholder="例如：確認或修改你的資料，填好後按下面的按鈕儲存。">${data.store.edit_profile_note||''}</textarea>
+      </div>
+      <div class="add-bar"><button class="btn btn-primary btn-sm" onclick="saveEditProfileNote()">💾 儲存</button></div>
     </div>
 
     <div class="two-col-row">
