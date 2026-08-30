@@ -1300,6 +1300,15 @@ function rerenderAnnouncementPageKeepingDraft(){
   const newContentEl = document.getElementById('annContent');
   if(newTitleEl) newTitleEl.value = titleVal;
   if(newContentEl) newContentEl.value = contentVal;
+  updateAnnouncementPreview();
+}
+function updateAnnouncementPreview(){
+  const titleEl = document.getElementById('annTitle');
+  const contentEl = document.getElementById('annContent');
+  const previewTitle = document.getElementById('annPreviewTitle');
+  const previewContent = document.getElementById('annPreviewContent');
+  if(previewTitle) previewTitle.textContent = (titleEl && titleEl.value.trim()) || '（尚未設定標題）';
+  if(previewContent) previewContent.textContent = (contentEl && contentEl.value.trim()) || '（尚未設定內容）';
 }
 async function saveAnnouncement(){
   const title = document.getElementById('annTitle').value.trim();
@@ -1332,8 +1341,8 @@ function pageAnnouncement(){
           <div class="toggle ${s.announcement_enabled?'on':''}" onclick="toggleAnnouncementEnabled()"><div class="knob"></div></div>
         </div>
         <div class="form-grid" style="margin-top:14px;">
-          <div class="field" style="grid-column:1/-1;"><label>公告標題</label><input id="annTitle" value="${s.announcement_title||''}" placeholder="例如：中秋連假停課通知"></div>
-          <div class="field" style="grid-column:1/-1;"><label>公告內容</label><textarea id="annContent" style="min-height:100px;" placeholder="例如：9/26（五）、9/27（六）停課一天，造成不便敬請見諒。">${s.announcement_content||''}</textarea></div>
+          <div class="field" style="grid-column:1/-1;"><label>公告標題</label><input id="annTitle" value="${s.announcement_title||''}" placeholder="例如：中秋連假停課通知" oninput="updateAnnouncementPreview()"></div>
+          <div class="field" style="grid-column:1/-1;"><label>公告內容</label><textarea id="annContent" style="min-height:100px;" placeholder="例如：9/26（五）、9/27（六）停課一天，造成不便敬請見諒。" oninput="updateAnnouncementPreview()">${s.announcement_content||''}</textarea></div>
           <div class="field" style="grid-column:1/-1;">
             <label>公告圖片（選填）</label>
             <input type="file" id="annImageInput" accept="image/*" onchange="onAnnouncementImageChange(event)">
@@ -1355,8 +1364,8 @@ function pageAnnouncement(){
         <div style="width:280px;background:#fff;border-radius:20px;padding:20px;box-shadow:0 8px 30px rgba(0,0,0,.15);position:relative;margin:14px 0;">
           <div style="position:absolute;top:10px;right:10px;width:24px;height:24px;border-radius:50%;background:rgba(0,0,0,.06);display:flex;align-items:center;justify-content:center;font-size:12px;">✕</div>
           ${previewImage ? `<img src="${previewImage}" style="width:100%;border-radius:12px;margin-bottom:14px;display:block;">` : ''}
-          <h3 style="margin:0 0 8px;font-size:16px;">${s.announcement_title || '（尚未設定標題）'}</h3>
-          <p style="margin:0 0 16px;font-size:13px;color:var(--muted);white-space:pre-wrap;line-height:1.6;">${s.announcement_content || '（尚未設定內容）'}</p>
+          <h3 id="annPreviewTitle" style="margin:0 0 8px;font-size:16px;">${s.announcement_title || '（尚未設定標題）'}</h3>
+          <p id="annPreviewContent" style="margin:0 0 16px;font-size:13px;color:var(--muted);white-space:pre-wrap;line-height:1.6;">${s.announcement_content || '（尚未設定內容）'}</p>
           <div style="background:var(--sage);color:#fff;text-align:center;padding:11px;border-radius:12px;font-weight:700;font-size:13px;">我知道了</div>
         </div>
       </div>
