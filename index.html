@@ -1276,8 +1276,8 @@ let pendingAnnouncementImage = undefined;
 function onAnnouncementImageChange(e){
   const file = e.target.files[0];
   if(!file) return;
-  if(file.size > 800*1024){
-    showToast('圖片太大了，請用小於 800KB 的圖片（可以先用手機修圖或線上工具壓縮）');
+  if(file.size > 1.5*1024*1024){
+    showToast('圖片太大了，請用小於 1.5MB 的圖片（可以先用手機修圖或線上工具壓縮）');
     e.target.value = '';
     return;
   }
@@ -1354,7 +1354,7 @@ function pageAnnouncement(){
               <label for="annImageInput" class="btn btn-ghost btn-sm" style="cursor:pointer;">選擇檔案</label>
               <span style="font-size:12px;color:${previewImage ? 'var(--sage)' : 'var(--muted)'};${previewImage ? 'font-weight:600;' : ''}white-space:nowrap;">${previewImage ? '您已選擇檔案' : '未選擇任何檔案'}</span>
             </div>
-            <div class="desc" style="margin-top:4px;">建議上傳寬度小於 1000px、檔案小於 800KB 的圖片，載入才不會太慢。</div>
+            <div class="desc" style="margin-top:4px;">建議上傳寬度小於 1000px、檔案小於 1.5MB 的圖片，載入才不會太慢。</div>
             ${previewImage ? `
             <div style="margin-top:10px;">
               <img src="${previewImage}" style="max-width:220px;max-height:220px;border-radius:10px;border:1px solid var(--line);display:block;">
@@ -1611,8 +1611,14 @@ function pageMembers(){
   else if(memberSortBy==='credits_desc') list = [...list].sort((a,b)=>b.remaining_credits-a.remaining_credits);
   else if(memberSortBy==='recent_asc') list = [...list].sort((a,b)=>(memberStatsCounts[a.line_user_id]||0)-(memberStatsCounts[b.line_user_id]||0));
   else if(memberSortBy==='recent_desc') list = [...list].sort((a,b)=>(memberStatsCounts[b.line_user_id]||0)-(memberStatsCounts[a.line_user_id]||0));
-  else if(memberSortBy==='tag_asc') list = [...list].sort((a,b)=>((a.tags&&a.tags[0])||'').localeCompare((b.tags&&b.tags[0])||''));
-  else if(memberSortBy==='tag_desc') list = [...list].sort((a,b)=>((b.tags&&b.tags[0])||'').localeCompare((a.tags&&a.tags[0])||''));
+  else if(memberSortBy==='tag_asc') list = [...list].sort((a,b)=>{
+    const ta = (a.tags&&a.tags[0])||''; const tb = (b.tags&&b.tags[0])||'';
+    if(!ta && tb) return 1; if(ta && !tb) return -1; return ta.localeCompare(tb);
+  });
+  else if(memberSortBy==='tag_desc') list = [...list].sort((a,b)=>{
+    const ta = (a.tags&&a.tags[0])||''; const tb = (b.tags&&b.tags[0])||'';
+    if(!ta && tb) return 1; if(ta && !tb) return -1; return tb.localeCompare(ta);
+  });
 
   const availableTags = data.store.available_tags || [];
 
