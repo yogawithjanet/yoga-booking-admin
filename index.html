@@ -2977,6 +2977,35 @@ function memberMultiOptionsHtml(){
   ).join('');
 }
 
+let txSelectedUids = new Set();
+function txMemberSearchableHtml(){
+  const chips = [...txSelectedUids].map(uid=>{
+    const m = data.members.find(x=>x.line_user_id===uid);
+    const name = m ? (m.display_name||'（未知學員）') : uid;
+    return `<span class="tag-chip"><span>${name}</span> <span class="x" onclick="toggleTxMember('${uid}')">&times;</span></span>`;
+  }).join('');
+  const rows = data.members.map(m=>{
+    const name = m.display_name||'（未知學員）';
+    const sel = txSelectedUids.has(m.line_user_id);
+    return `<div class="tx-member-row${sel?' selected':''}" data-name="${name.toLowerCase()}" onclick="toggleTxMember('${m.line_user_id}')" style="padding:6px 10px;cursor:pointer;font-size:13px;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--line);">
+      <span style="width:18px;height:18px;border-radius:4px;border:1.5px solid ${sel?'var(--sage)':'var(--muted)'};background:${sel?'var(--sage)':'transparent'};display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;"><span style="color:#fff;font-size:11px;font-weight:700;">${sel?'✓':''}</span></span>
+      ${name}</div>`;
+  }).join('');
+  return `<div id="txMemberChips" class="tag-chip-wrap" style="${txSelectedUids.size?'margin-bottom:8px;':''}">${chips}</div>
+    <input type="text" id="txMemberSearch" placeholder="輸入學員名稱搜尋..." oninput="filterTxMembers()" autocomplete="off" style="margin-bottom:6px;">
+    <div id="txMemberList" style="max-height:160px;overflow-y:auto;border:1px solid var(--line);border-radius:8px;">${rows}</div>`;
+}
+function filterTxMembers(){
+  const q = (document.getElementById('txMemberSearch')?.value||'').toLowerCase();
+  document.querySelectorAll('.tx-member-row').forEach(el=>{
+    el.style.display = !q || el.dataset.name.includes(q) ? 'flex' : 'none';
+  });
+}
+function toggleTxMember(uid){
+  if(txSelectedUids.has(uid)) txSelectedUids.delete(uid); else txSelectedUids.add(uid);
+  render();
+}
+
 function onTxTypeChange(){
   const type = document.getElementById('txType').value;
   document.getElementById('txCostTypeField').style.display = type==='expense' ? 'block' : 'none';
@@ -2988,7 +3017,7 @@ async function submitManualTransaction(){
   if(!amount || amount<=0){ showToast('請輸入正確的金額'); return; }
   const occurredAt = document.getElementById('txDate').value || todayISO(0);
   const costType = type==='expense' ? (document.getElementById('txCostType').value || null) : null;
-  const selectedUids = [...document.getElementById('txMember').selectedOptions].map(o=>o.value);
+  const selectedUids = [...txSelectedUids];
   const note = document.getElementById('txNote').value.trim();
 
   if(selectedUids.length===0){
@@ -2998,6 +3027,7 @@ async function submitManualTransaction(){
       await insertTransaction({ type, amount, note, lineUserId, occurredAt, costType });
     }
   }
+  txSelectedUids.clear();
   await loadCashflowData();
   render();
   showToast(`已新增 ${Math.max(1, selectedUids.length)} 筆${type==='income'?'收入':'支出'}：每筆 NT$ ${amount.toLocaleString()}`);
@@ -3326,8 +3356,8 @@ function pageCashflow(){
               </select>
             </div>
             <div class="field" style="grid-column:1/-1;">
-              <label>學員（選填，可多選，通常收入才會指定；按住 Cmd／Ctrl 可複選）</label>
-              <select id="txMember" multiple size="5" style="height:auto;">${memberMultiOptionsHtml()}</select>
+              <label>學員（選填，可多選，通常收入才會指定）</label>
+              ${txMemberSearchableHtml()}
               <div class="desc" style="margin-top:4px;">選多位學員的話，每人各記一筆一樣金額的紀錄；不選就是不指定學員的一筆。</div>
             </div>
             <div class="field" style="grid-column:1/-1;"><label>備註</label><input id="txNote" placeholder="例如：場地租金、教材採購、10堂課程"></div>
