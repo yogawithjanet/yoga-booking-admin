@@ -408,8 +408,9 @@
   <div class="login-box" id="loginBox">
     <div class="lock-ic">🔒</div>
     <h2>後台管理登入</h2>
-    <p>此頁面僅供店家／管理員使用，請輸入管理密碼。</p>
-    <input type="password" id="loginPassword" placeholder="請輸入密碼" onkeydown="if(event.key==='Enter') tryLogin()">
+    <p>此頁面僅供店家／管理員使用，請輸入管理員帳號。</p>
+    <input type="email" id="loginEmail" placeholder="管理員 Email" onkeydown="if(event.key==='Enter') document.getElementById('loginPassword').focus()" style="margin-bottom:10px;">
+    <input type="password" id="loginPassword" placeholder="密碼" onkeydown="if(event.key==='Enter') tryLogin()">
     <div class="login-err" id="loginErr"></div>
     <button class="btn btn-primary" onclick="tryLogin()">登入</button>
     <div style="text-align:center;margin-top:12px;">
@@ -420,19 +421,10 @@
   <div class="login-box" id="forgotBox" style="display:none;">
     <div class="lock-ic">🔑</div>
     <h2>重設密碼</h2>
-    <div id="forgotStep1">
-      <p id="securityQuestionText">安全問題載入中...</p>
-      <input type="text" id="securityAnswerInput" placeholder="請輸入答案">
-      <div class="login-err" id="forgotErr1"></div>
-      <button class="btn btn-primary" onclick="verifySecurityAnswer()">驗證答案</button>
-    </div>
-    <div id="forgotStep2" style="display:none;">
-      <p>驗證成功，請設定新密碼。</p>
-      <input type="password" id="newPwInput" placeholder="新密碼（至少 6 碼）">
-      <input type="password" id="newPwInput2" placeholder="再次輸入新密碼">
-      <div class="login-err" id="forgotErr2"></div>
-      <button class="btn btn-primary" onclick="resetPasswordViaForgot()">確認重設</button>
-    </div>
+    <p>輸入你的管理員 Email，我們會寄一封重設密碼的信給你。</p>
+    <input type="email" id="resetEmail" placeholder="管理員 Email">
+    <div class="login-err" id="forgotErr1"></div>
+    <button class="btn btn-primary" onclick="sendPasswordReset()">寄送重設信件</button>
     <div style="text-align:center;margin-top:12px;">
       <span style="font-size:12.5px;color:var(--muted);cursor:pointer;text-decoration:underline;" onclick="showLoginBox()">返回登入</span>
     </div>
@@ -518,7 +510,7 @@ function applyTheme(themeName){
 }
 
 let data = {
-  store: { name:'團課教室', admin_password:'class1234', security_question:'', security_answer:'', theme:'sage', available_tags:[], tag_colors:{} },
+  store: { name:'團課教室', theme:'sage', available_tags:[], tag_colors:{} },
   classes: [],   // class_templates
   teachers: [],
   members: [],
@@ -702,15 +694,10 @@ function pageOverview(){
     </div>
 
     <div class="panel">
-      <div class="panel-head"><h3>忘記密碼用的安全問題</h3></div>
+      <div class="panel-head"><h3>忘記密碼</h3></div>
       <div class="panel-body">
-        <div class="hint-box">💡 如果忘記密碼，登入畫面可以點「忘記密碼？」，回答這個問題答對就能重設密碼。答案不分大小寫。</div>
-        <div class="form-grid">
-          <div class="field" style="grid-column:1/-1"><label>安全問題</label><input id="stSecQ" value="${s.security_question||''}" placeholder="例如：你的教室最早是在哪一年成立的？"></div>
-          <div class="field" style="grid-column:1/-1"><label>答案</label><input id="stSecA" value="${s.security_answer||''}" placeholder="請設定答案"></div>
-        </div>
+        <div class="hint-box">💡 如果忘記密碼，登入畫面可以點「忘記密碼？」，系統會發送重設密碼的連結到你的 Email 信箱。</div>
       </div>
-      <div class="add-bar"><button class="btn btn-primary" onclick="saveSecurityQA()">儲存安全問題</button></div>
     </div>
     </div>`;
 }
@@ -1238,28 +1225,14 @@ async function removeTeacher(id){
   await loadAdminState(); render(); showToast('已刪除');
 }
 
-function changePassword(){
+async function changePassword(){
   const pw1 = document.getElementById('stNewPw').value;
   const pw2 = document.getElementById('stNewPw2').value;
   if(pw1.length<6){ showToast('密碼至少要 6 碼'); return; }
   if(pw1!==pw2){ showToast('兩次輸入的密碼不一致'); return; }
-  updatePasswordInDB(pw1);
-}
-async function updatePasswordInDB(pw){
-  const { error } = await db.from('store_settings').update({ admin_password: pw }).eq('id', 1);
-  if(error){ showToast('更新失敗'); console.error(error); return; }
-  data.store.admin_password = pw;
+  const { error } = await db.auth.updateUser({ password: pw1 });
+  if(error){ showToast('更新失敗：' + error.message); console.error(error); return; }
   showToast('密碼已更新，下次登入請使用新密碼');
-}
-async function saveSecurityQA(){
-  const q = document.getElementById('stSecQ').value.trim();
-  const a = document.getElementById('stSecA').value.trim();
-  if(!q || !a){ showToast('問題與答案都要填寫'); return; }
-  const { error } = await db.from('store_settings').update({ security_question:q, security_answer:a }).eq('id', 1);
-  if(error){ showToast('更新失敗'); console.error(error); return; }
-  data.store.security_question = q;
-  data.store.security_answer = a;
-  showToast('已更新安全問題');
 }
 async function toggleAnnouncementEnabled(){
   const newVal = !data.store.announcement_enabled;
@@ -4099,29 +4072,32 @@ document.querySelectorAll('.nav-item').forEach(item=>{
   item.addEventListener('click', ()=>{ navigateToPage(item.dataset.page); closeMobileNav(); });
 });
 
-const SESSION_KEY = 'admin-logged-in-v1';
-
-function tryLogin(){
-  const input = document.getElementById('loginPassword');
+async function tryLogin(){
+  const email = document.getElementById('loginEmail').value.trim();
+  const pw = document.getElementById('loginPassword').value;
   const err = document.getElementById('loginErr');
-  const correctPw = data.store.admin_password || 'class1234';
-  if(input.value === correctPw){
-    localStorage.setItem(SESSION_KEY, '1'); // 記住這台裝置已登入，重新整理不用再輸入密碼
-    document.getElementById('loginScreen').style.display = 'none';
-    document.getElementById('app').style.display = 'flex';
-    applySidebarCollapsedState();
-    render();
-  } else {
-    err.textContent = '密碼錯誤，請再試一次';
-    input.value = '';
-    input.focus();
+  if(!email){ err.textContent = '請輸入 Email'; return; }
+  if(!pw){ err.textContent = '請輸入密碼'; return; }
+  err.textContent = '登入中...';
+  const { error } = await db.auth.signInWithPassword({ email, password: pw });
+  if(error){
+    err.textContent = error.message === 'Invalid login credentials' ? 'Email 或密碼錯誤' : '登入失敗：' + error.message;
+    return;
   }
+  try{ await loadAdminState(); }catch(e){ console.error(e); }
+  applyTheme(data.store.theme || 'sage');
+  document.getElementById('loginScreen').style.display = 'none';
+  document.getElementById('app').style.display = 'flex';
+  applySidebarCollapsedState();
+  const savedPage = localStorage.getItem(CURRENT_PAGE_KEY) || 'overview';
+  await navigateToPage(savedPage);
 }
-function logout(){
-  localStorage.removeItem(SESSION_KEY);
+async function logout(){
+  await db.auth.signOut();
   localStorage.removeItem(CURRENT_PAGE_KEY);
   document.getElementById('app').style.display = 'none';
   document.getElementById('loginScreen').style.display = 'flex';
+  document.getElementById('loginEmail').value = '';
   document.getElementById('loginPassword').value = '';
   document.getElementById('loginErr').textContent = '';
   showLoginBox();
@@ -4131,10 +4107,7 @@ function logout(){
 function showForgotBox(){
   document.getElementById('loginBox').style.display = 'none';
   document.getElementById('forgotBox').style.display = 'block';
-  document.getElementById('forgotStep1').style.display = 'block';
-  document.getElementById('forgotStep2').style.display = 'none';
-  document.getElementById('securityQuestionText').textContent = data.store.security_question || '（尚未設定安全問題，請聯繫系統開發者協助重設）';
-  document.getElementById('securityAnswerInput').value = '';
+  document.getElementById('resetEmail').value = '';
   document.getElementById('forgotErr1').textContent = '';
 }
 function showLoginBox(){
@@ -4143,51 +4116,37 @@ function showLoginBox(){
   document.getElementById('loginPassword').value = '';
   document.getElementById('loginErr').textContent = '';
 }
-function verifySecurityAnswer(){
-  const ans = document.getElementById('securityAnswerInput').value.trim();
-  const correct = (data.store.security_answer || '').trim();
+async function sendPasswordReset(){
+  const email = document.getElementById('resetEmail').value.trim();
   const err = document.getElementById('forgotErr1');
-  if(!correct){ err.textContent = '尚未設定安全問題答案，無法透過此方式重設，請直接到 Supabase 後台修改 store_settings 資料表。'; return; }
-  if(ans.toLowerCase() !== correct.toLowerCase()){
-    err.textContent = '答案不正確，請再試一次';
-    return;
-  }
-  document.getElementById('forgotStep1').style.display = 'none';
-  document.getElementById('forgotStep2').style.display = 'block';
-}
-async function resetPasswordViaForgot(){
-  const pw1 = document.getElementById('newPwInput').value;
-  const pw2 = document.getElementById('newPwInput2').value;
-  const err = document.getElementById('forgotErr2');
-  if(pw1.length<6){ err.textContent = '密碼至少要 6 碼'; return; }
-  if(pw1!==pw2){ err.textContent = '兩次輸入的密碼不一致'; return; }
-  const { error } = await db.from('store_settings').update({ admin_password: pw1 }).eq('id', 1);
-  if(error){ err.textContent = '重設失敗，請稍後再試'; console.error(error); return; }
-  data.store.admin_password = pw1;
-  showToast('密碼已重設，請用新密碼登入');
-  showLoginBox();
+  if(!email){ err.textContent = '請輸入 Email'; return; }
+  err.textContent = '寄送中...';
+  const { error } = await db.auth.resetPasswordForEmail(email);
+  if(error){ err.textContent = '寄送失敗：' + error.message; return; }
+  err.style.color = 'var(--sage)';
+  err.textContent = '已寄出！請到信箱點擊重設連結。';
 }
 
 (async function init(){
-  try{
-    await loadAdminState();
-    applyTheme(data.store.theme || 'sage');
-  }catch(e){
-    console.error('讀取資料庫失敗，請確認 Supabase 資料表是否已建立：', e);
-  }
+  const { data: { session } } = await db.auth.getSession();
 
   document.getElementById('bootLoading').style.display = 'none';
 
-  if(localStorage.getItem(SESSION_KEY) === '1'){
-    // 這台裝置先前登入過，不用再輸入密碼，直接進畫面
+  if(session){
+    try{
+      await loadAdminState();
+      applyTheme(data.store.theme || 'sage');
+    }catch(e){
+      console.error('讀取資料庫失敗，請確認 Supabase 資料表是否已建立：', e);
+    }
     document.getElementById('loginScreen').style.display = 'none';
     document.getElementById('app').style.display = 'flex';
     applySidebarCollapsedState();
     const savedPage = localStorage.getItem(CURRENT_PAGE_KEY) || 'overview';
-    await navigateToPage(savedPage); // 回到重新整理前所在的那一頁
+    await navigateToPage(savedPage);
   } else {
     document.getElementById('loginScreen').style.display = 'flex';
-    document.getElementById('loginPassword').focus();
+    document.getElementById('loginEmail').focus();
   }
 })();
 </script>
