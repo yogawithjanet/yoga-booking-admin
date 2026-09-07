@@ -2160,9 +2160,6 @@ function pageMemberDetail(){
       .sort((a,b)=> new Date(a.created_at) - new Date(b.created_at));
     const activeBatchIds = new Set(activeBatches.map(b=>b.id));
     const activeBookings = memberBookings.filter(bk=>bk.status==='active');
-    // 「有連結」只算連到還有效（原始堂數>0）的批次；如果連結到的批次後來被
-    // 歸零／作廢了，這筆預約就變成「孤兒」，要跟沒連結的預約一起重新分配，
-    // 不然這堂實際上過的課會直接消失不見，害其他批次被誤判成還有堂數沒用。
     const linkedBookings = activeBookings.filter(bk=>bk.credit_batch_id && activeBatchIds.has(bk.credit_batch_id));
     const orphanBookings = activeBookings.filter(bk=>!bk.credit_batch_id || !activeBatchIds.has(bk.credit_batch_id))
       .sort((a,b)=> new Date(a.created_at) - new Date(b.created_at));
@@ -2171,13 +2168,18 @@ function pageMemberDetail(){
     activeBatches.forEach(b=>{ assignment[b.id] = []; });
     linkedBookings.forEach(bk=>{ assignment[bk.credit_batch_id].push(bk); });
 
-    let idx = 0;
-    for(const b of activeBatches){
-      let capacity = b.amount - assignment[b.id].length;
-      while(capacity > 0 && idx < orphanBookings.length){
-        assignment[b.id].push(orphanBookings[idx]);
-        idx++; capacity--;
+    for(const orphan of orphanBookings){
+      const classDate = orphan.class_date_iso || '';
+      let best = null;
+      for(const b of activeBatches){
+        if(b.amount - assignment[b.id].length <= 0) continue;
+        const expiry = b.expires_at || '9999-12-31';
+        if(classDate && classDate <= expiry){
+          if(!best || expiry < (best.expires_at||'9999-12-31')) best = b;
+        }
       }
+      if(!best) best = activeBatches.find(b => b.amount - assignment[b.id].length > 0);
+      if(best) assignment[best.id].push(orphan);
     }
     return assignment;
   }
@@ -2552,18 +2554,35 @@ async function adminCancelBooking(bookingId){
   if(error){ showToast('取消失敗'); console.error(error); return; }
   if(!updated || updated.length===0){ showToast('這筆已經是取消狀態了'); return; } // 防止連點造成重複退還堂數
 
-  if(b.credit_batch_id){
-    const { data: batch } = await db.from('credit_batches').select('remaining').eq('id', b.credit_batch_id).single();
-    if(batch) await db.from('credit_batches').update({ remaining: batch.remaining + 1 }).eq('id', b.credit_batch_id);
+  let returnedToBatch = false;
+  let targetBatchId = b.credit_batch_id;
+  if(!targetBatchId){
+    const { data: batches } = await db.from('credit_batches')
+      .select('id, expires_at').eq('line_user_id', b.line_user_id).gt('amount', 0)
+      .order('expires_at', { ascending:true, nullsFirst:false });
+    if(batches){
+      const classDate = b.class_date_iso || '';
+      const match = batches.find(bt => classDate && classDate <= (bt.expires_at||'9999-12-31'));
+      if(match) targetBatchId = match.id;
+    }
+  }
+  if(targetBatchId){
+    const { data: batch } = await db.from('credit_batches').select('remaining').eq('id', targetBatchId).single();
+    if(batch){
+      await db.from('credit_batches').update({ remaining: batch.remaining + 1 }).eq('id', targetBatchId);
+      returnedToBatch = true;
+    }
   }
 
   const m = data.members.find(x=>x.line_user_id===b.line_user_id);
-  const newCredits = (m ? m.remaining_credits : 0) + 1;
-  await db.from('members').update({ remaining_credits:newCredits }).eq('line_user_id', b.line_user_id);
-  if(m) m.remaining_credits = newCredits;
+  if(returnedToBatch){
+    const newCredits = (m ? m.remaining_credits : 0) + 1;
+    await db.from('members').update({ remaining_credits:newCredits }).eq('line_user_id', b.line_user_id);
+    if(m) m.remaining_credits = newCredits;
+  }
 
   await openMemberDetail(b.line_user_id);
-  showToast('已取消這筆預約，堂數已退還');
+  showToast(returnedToBatch ? '已取消這筆預約，堂數已退回批次' : '已取消這筆預約（找不到對應的堂數批次，堂數未變動）');
 }
 
 function getRowExpiryInput(lineUserId){
