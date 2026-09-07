@@ -2463,15 +2463,15 @@ async function checkCapacityBeforeBooking(entries){
 }
 
 async function insertOneBooking(lineUserId, c){
-  // 先找一批還有剩的堂數批次來扣（越快到期的優先扣）
   let batchId = null, batchRemainingBefore = null;
   const { data: batches } = await db.from('credit_batches')
-    .select('id, remaining').eq('line_user_id', lineUserId).gt('remaining', 0)
+    .select('id, remaining, expires_at').eq('line_user_id', lineUserId).gt('remaining', 0)
     .order('expires_at', { ascending:true, nullsFirst:false });
   if(batches && batches.length>0){
-    const b = batches[0];
-    batchId = b.id; batchRemainingBefore = b.remaining;
-    await db.from('credit_batches').update({ remaining: b.remaining - 1 }).eq('id', b.id);
+    const classDate = c.classDateIso || '';
+    const match = batches.find(bt => classDate && classDate <= (bt.expires_at||'9999-12-31')) || batches[0];
+    batchId = match.id; batchRemainingBefore = match.remaining;
+    await db.from('credit_batches').update({ remaining: match.remaining - 1 }).eq('id', match.id);
   }
 
   const { error } = await db.from('bookings').insert({
