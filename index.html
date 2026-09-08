@@ -734,7 +734,8 @@ function getDayOccurrences(iso){
   const cancelledTemplateIds = new Set(
     dayOverrides.filter(o=>o.type==='cancel' && o.date===iso).map(o=>o.class_template_id)
   );
-  const recurring = data.classes.filter(c=>c.active && (c.weekdays||[]).includes(wd) && !cancelledTemplateIds.has(c.id));
+  const recurring = data.classes.filter(c=>c.active && (c.weekdays||[]).includes(wd) && !cancelledTemplateIds.has(c.id)
+    && (!c.start_date || iso >= c.start_date) && (!c.end_date || iso <= c.end_date));
   const extras = dayOverrides.filter(o=>o.type==='extra' && o.date===iso);
   return { recurring, extras };
 }
@@ -933,7 +934,11 @@ async function saveExtraOverrideEdit(){
 
 function pageClasses(){
   const n = data.notify;
-  const rows = data.classes.map(c=>`
+  const rows = data.classes.map(c=>{
+    const dateRange = c.start_date
+      ? (c.end_date ? `${c.start_date} ～ ${c.end_date}` : `${c.start_date} 起`)
+      : '—';
+    return `
     <tr>
       <td><b>${c.title}</b></td>
       <td>${c.teacher}</td>
@@ -941,13 +946,15 @@ function pageClasses(){
       <td>${c.time}（${c.duration}分）</td>
       <td>${(c.weekdays||[]).join('、')}</td>
       <td>${c.cap} 人</td>
+      <td style="font-size:12px;">${dateRange}</td>
       <td>
         <div class="row-actions">
           <button class="btn btn-ghost btn-sm" onclick="startEditClass('${c.id}')">編輯</button>
           <button class="btn btn-danger btn-sm" onclick="removeClass('${c.id}')">刪除</button>
         </div>
       </td>
-    </tr>`).join('');
+    </tr>`;
+  }).join('');
 
   const editing = editingClassId ? data.classes.find(c=>c.id===editingClassId) : null;
   const selectedDays = editing ? (editing.weekdays||[]) : [];
@@ -1008,8 +1015,8 @@ function pageClasses(){
       </div>
       <div class="panel-body pad0" style="overflow-x:auto;">
         <table>
-          <thead><tr><th>課程名稱</th><th>授課老師</th><th>地點</th><th>時段</th><th>上課星期</th><th>容納人數</th><th></th></tr></thead>
-          <tbody>${rows || '<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:20px;">尚無課程範本，點右上角「＋ 新增課程」開始設定</td></tr>'}</tbody>
+          <thead><tr><th>課程名稱</th><th>授課老師</th><th>地點</th><th>時段</th><th>上課星期</th><th>容納人數</th><th>期間</th><th></th></tr></thead>
+          <tbody>${rows || '<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:20px;">尚無課程範本，點右上角「＋ 新增課程」開始設定</td></tr>'}</tbody>
         </table>
       </div>
 
@@ -1036,6 +1043,8 @@ function pageClasses(){
               ${WEEKDAYS.map(w=>`<div class="wd-chip ${selectedDays.includes(w)?'on':''}" data-w="${w}" onclick="this.classList.toggle('on')">${w}</div>`).join('')}
             </div>
           </div>
+          <div class="field"><label>開課日期 <span style="color:var(--danger);font-size:11px;">必填</span></label><input id="ncStartDate" type="date" value="${editing ? (editing.start_date||'') : ''}"></div>
+          <div class="field"><label>結束日期（選填）</label><input id="ncEndDate" type="date" value="${editing ? (editing.end_date||'') : ''}"></div>
           <div class="field" style="grid-column:1/-1;"><label>課程介紹（選填）</label><textarea id="ncDescription" style="min-height:70px;">${editing ? (editing.description||'') : ''}</textarea></div>
         </div>
         <div class="add-bar" style="padding-left:0;padding-right:0;">
@@ -1127,19 +1136,23 @@ async function saveClassForm(){
   const cap = Number(document.getElementById('ncCap').value)||10;
   const weekdays = [...document.querySelectorAll('#ncDays .wd-chip.on')].map(el=>el.dataset.w);
   const description = document.getElementById('ncDescription').value.trim();
+  const startDate = document.getElementById('ncStartDate').value || null;
+  const endDate = document.getElementById('ncEndDate').value || null;
   if(!title){ showToast('請輸入課程名稱'); return; }
   if(weekdays.length===0){ showToast('請至少選擇一個上課星期'); return; }
   if(!teacher){ showToast('請先在「老師管理」新增至少一位老師'); return; }
+  if(!startDate){ showToast('請設定開課日期'); return; }
+  if(endDate && endDate < startDate){ showToast('結束日期不能早於開課日期'); return; }
 
   if(editingClassId){
-    const { error } = await db.from('class_templates').update({ title, teacher, location, time, duration, cap, weekdays, description }).eq('id', editingClassId);
+    const { error } = await db.from('class_templates').update({ title, teacher, location, time, duration, cap, weekdays, description, start_date:startDate, end_date:endDate }).eq('id', editingClassId);
     if(error){ showToast('儲存失敗，請稍後再試'); console.error(error); return; }
     editingClassId = null;
     await loadAdminState();
     showToast('已儲存修改');
     render();
   } else {
-    const { error } = await db.from('class_templates').insert({ title, teacher, location, time, duration, cap, weekdays, description, active:true });
+    const { error } = await db.from('class_templates').insert({ title, teacher, location, time, duration, cap, weekdays, description, active:true, start_date:startDate, end_date:endDate });
     if(error){ showToast('新增失敗，請稍後再試'); console.error(error); return; }
     await loadAdminState();
     showToast('已新增課程範本，將自動套用到未來課表');
@@ -2714,7 +2727,10 @@ function pageRoster(){
   const grouped = {};
   rosterData.forEach(b=>{
     const key = b.class_key;
-    if(!grouped[key]) grouped[key] = { title:b.class_title, time:b.class_time, teacher:b.teacher, cap:b.cap, students:[] };
+    if(!grouped[key]){
+      const tmpl = b.class_template_id ? data.classes.find(c=>c.id===b.class_template_id) : null;
+      grouped[key] = { title: tmpl ? tmpl.title : b.class_title, time: tmpl ? tmpl.time : b.class_time, teacher: tmpl ? tmpl.teacher : b.teacher, cap: tmpl ? tmpl.cap : b.cap, students:[] };
+    }
     grouped[key].students.push(memberName(b.line_user_id));
   });
   const groups = Object.values(grouped).sort((a,b)=>a.time.localeCompare(b.time));
