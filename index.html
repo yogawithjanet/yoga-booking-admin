@@ -707,6 +707,15 @@ let editingClassId = null;
 let dayOverrides = []; // 單日停課/加課的例外清單
 let dayOverrideDate = new Date().toISOString().slice(0,10);
 let exceptionSortBy = 'date_asc';
+let exceptionFilterMonth = new Date().toISOString().slice(0,7);
+function changeExceptionMonth(val){ exceptionFilterMonth = val; render(); }
+function stepExceptionMonth(delta){
+  let [y,m] = exceptionFilterMonth.split('-').map(Number);
+  m += delta;
+  if(m<1){ m=12; y--; } if(m>12){ m=1; y++; }
+  exceptionFilterMonth = `${y}-${String(m).padStart(2,'0')}`;
+  render();
+}
 function sortExceptionColumn(col){
   if(exceptionSortBy === col+'_asc') exceptionSortBy = col+'_desc';
   else if(exceptionSortBy === col+'_desc') exceptionSortBy = 'date_asc';
@@ -960,7 +969,7 @@ function pageClasses(){
   const selectedDays = editing ? (editing.weekdays||[]) : [];
   const formOpen = editing || showAddClassForm;
 
-  // 停課＆特別課清單（合併成一張表，可排序）
+  // 停課＆特別課清單（合併成一張表，按月份篩選，可排序）
   let exceptionRows = [
     ...dayOverrides.filter(o=>o.type==='cancel').map(o=>{
       const tmpl = data.classes.find(c=>c.id===o.class_template_id);
@@ -970,6 +979,8 @@ function pageClasses(){
       ({ date:o.date, label:`${o.time} ${o.title}（${o.teacher}）`, type:'特別課', id:o.id, danger:true })
     )
   ];
+  const allExceptionCount = exceptionRows.length;
+  exceptionRows = exceptionRows.filter(r => r.date.slice(0,7) === exceptionFilterMonth);
   if(exceptionSortBy==='date_asc') exceptionRows.sort((a,b)=> a.date<b.date?-1:(a.date>b.date?1:0));
   else if(exceptionSortBy==='date_desc') exceptionRows.sort((a,b)=> a.date>b.date?-1:(a.date<b.date?1:0));
   else if(exceptionSortBy==='type_asc') exceptionRows.sort((a,b)=> a.type.localeCompare(b.type));
@@ -985,10 +996,20 @@ function pageClasses(){
       </div>
     </div>`;
 
-  const exceptionPanelHtml = exceptionRows.length ? `
+  const [efYear, efMonth] = exceptionFilterMonth.split('-').map(Number);
+  const exceptionMonthLabel = `${efYear} 年 ${efMonth} 月`;
+  const exceptionPanelHtml = allExceptionCount ? `
     <div class="panel">
-      <div class="panel-head"><h3>停課＆特別課清單</h3></div>
+      <div class="panel-head">
+        <h3>停課＆特別課清單</h3>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <button class="btn btn-ghost btn-sm" onclick="stepExceptionMonth(-1)" style="padding:4px 8px;">‹</button>
+          <input type="month" value="${exceptionFilterMonth}" onchange="changeExceptionMonth(this.value)" style="border:1px solid var(--line);border-radius:6px;padding:4px 8px;font-size:13px;">
+          <button class="btn btn-ghost btn-sm" onclick="stepExceptionMonth(1)" style="padding:4px 8px;">›</button>
+        </div>
+      </div>
       <div class="panel-body pad0">
+        ${exceptionRows.length ? `
         <table><thead><tr>
           <th style="cursor:pointer;user-select:none;" onclick="sortExceptionColumn('date')">日期 ${exceptionSortArrow('date')}</th>
           <th style="cursor:pointer;user-select:none;" onclick="sortExceptionColumn('type')">類型 ${exceptionSortArrow('type')}</th>
@@ -1001,6 +1022,7 @@ function pageClasses(){
             <td>${r.label}</td>
             <td><div class="row-actions"><button class="btn btn-ghost btn-sm" onclick="removeOverride('${r.id}')">移除</button></div></td>
           </tr>`).join('')}</tbody></table>
+        ` : `<div style="text-align:center;color:var(--muted);padding:24px;">${exceptionMonthLabel} 沒有停課或特別課紀錄</div>`}
       </div>
     </div>` : '';
 
