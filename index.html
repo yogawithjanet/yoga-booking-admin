@@ -820,7 +820,7 @@ function buildDayDetailHTML(){
       <div class="row-actions">
         ${c._modified
           ? `<button class="btn btn-ghost btn-sm" onclick="editModifyOverride('${iso}','${c.id}','${c._modifyId}')">編輯</button>`
-          : `<button class="btn btn-ghost btn-sm" onclick="quickEditOccurrence('${iso}','${c.id}')">只修改這天</button>`}
+          : `<button class="btn btn-ghost btn-sm" onclick="quickEditOccurrence('${iso}','${c.id}')">編輯</button>`}
         <button class="btn btn-danger btn-sm" onclick="quickCancelOccurrence('${iso}','${c.id}')">停開這天</button>
       </div>
     </div>`;
