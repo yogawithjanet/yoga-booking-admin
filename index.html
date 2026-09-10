@@ -743,8 +743,15 @@ function getDayOccurrences(iso){
   const cancelledTemplateIds = new Set(
     dayOverrides.filter(o=>o.type==='cancel' && o.date===iso).map(o=>o.class_template_id)
   );
+  const modifyMap = {};
+  dayOverrides.filter(o=>o.type==='modify' && o.date===iso).forEach(o=>{ modifyMap[o.class_template_id] = o; });
   const recurring = data.classes.filter(c=>c.active && (c.weekdays||[]).includes(wd) && !cancelledTemplateIds.has(c.id)
-    && (!c.start_date || iso >= c.start_date) && (!c.end_date || iso <= c.end_date));
+    && (!c.start_date || iso >= c.start_date) && (!c.end_date || iso <= c.end_date))
+    .map(c=>{
+      const mod = modifyMap[c.id];
+      if(!mod) return c;
+      return { ...c, title:mod.title||c.title, teacher:mod.teacher||c.teacher, time:mod.time||c.time, cap:mod.cap!=null?mod.cap:c.cap, location:mod.location!=null?mod.location:c.location, description:mod.description!=null?mod.description:c.description, _modified:true, _modifyId:mod.id };
+    });
   const extras = dayOverrides.filter(o=>o.type==='extra' && o.date===iso);
   return { recurring, extras };
 }
@@ -806,11 +813,15 @@ function buildDayDetailHTML(){
 
   let rowsHtml = '';
   recurring.forEach(c=>{
+    const modNote = c._modified ? ' <span style="color:var(--sage-dark);font-size:12px;">（已修改）</span>' : '';
     rowsHtml += `
     <div class="settings-row">
-      <div><div class="label">${c.time}　${c.title}（${c.teacher}）</div><div class="desc">固定課程</div></div>
+      <div><div class="label">${c.time}　${c.title}（${c.teacher}）${modNote}</div><div class="desc">固定課程</div></div>
       <div class="row-actions">
-        <button class="btn btn-ghost btn-sm" onclick="quickEditOccurrence('${iso}','${c.id}')">只修改這天</button>
+        ${c._modified
+          ? `<button class="btn btn-ghost btn-sm" onclick="editModifyOverride('${iso}','${c.id}','${c._modifyId}')">編輯</button>
+             <button class="btn btn-ghost btn-sm" onclick="revertModifyOverride('${c._modifyId}')">還原</button>`
+          : `<button class="btn btn-ghost btn-sm" onclick="quickEditOccurrence('${iso}','${c.id}')">只修改這天</button>`}
         <button class="btn btn-danger btn-sm" onclick="quickCancelOccurrence('${iso}','${c.id}')">停開這天</button>
       </div>
     </div>`;
@@ -833,9 +844,15 @@ function buildDayDetailHTML(){
   let inlineFormHtml = '';
   if(inlineDayEdit && showAddClassForm && classFormMode === 'single'){
     const pf = singleDayFormPrefill || {};
+    const isModify = !!inlineEditTemplateId;
+    const formLabel = isModify ? '修改這天的課程' : (editingOverrideId ? '編輯特別課' : '加開特別課');
+    let saveBtn;
+    if(isModify) saveBtn = `<button class="btn btn-primary" onclick="saveModifyOverride()">儲存</button>`;
+    else if(editingOverrideId) saveBtn = `<button class="btn btn-primary" onclick="saveExtraOverrideEdit()">儲存修改</button>`;
+    else saveBtn = `<button class="btn btn-primary" onclick="addExtraOverride()">儲存</button>`;
     inlineFormHtml = `
     <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--line);" id="classFormPanel">
-      <div class="label" style="margin-bottom:12px;">${editingOverrideId ? '編輯特別課' : '修改這天的課程'}</div>
+      <div class="label" style="margin-bottom:12px;">${formLabel}</div>
       <div class="form-grid">
         <div class="field"><label>課程名稱</label><input id="ovExtraTitle" placeholder="例如：中秋特別班" value="${pf.title||''}"></div>
         <div class="field"><label>授課老師</label>
@@ -848,9 +865,7 @@ function buildDayDetailHTML(){
       </div>
       <div style="display:flex;gap:8px;margin-top:12px;">
         <button class="btn btn-ghost" onclick="cancelEditExtraOverride()">取消</button>
-        ${editingOverrideId
-          ? `<button class="btn btn-primary" onclick="saveExtraOverrideEdit()">儲存修改</button>`
-          : `<button class="btn btn-primary" onclick="addExtraOverride()">儲存</button>`}
+        ${saveBtn}
       </div>
     </div>`;
   }
@@ -867,6 +882,7 @@ function openSingleDayFormFor(iso){
   editingClassId = null;
   editingOverrideId = null;
   inlineDayEdit = true;
+  inlineEditTemplateId = null;
   singleDayFormPrefill = null;
   render();
 }
@@ -899,28 +915,73 @@ let showAddClassForm = false;    // 表單預設收起，避免畫面太滿
 let editingOverrideId = null;    // 目前正在編輯的特別課（單日加開）id
 let singleDayFormPrefill = null; // 開啟「只有這一天」表單時，預先帶入的內容
 let inlineDayEdit = false;       // 從日曆觸發的單日編輯，表單顯示在日曆內而非上方範本面板
+let inlineEditTemplateId = null; // 正在修改的範本 ID（type='modify'），null 則是加開特別課（type='extra'）
 
 function setClassFormMode(mode){ classFormMode = mode; render(); }
 function toggleAddClassForm(){
   showAddClassForm = !showAddClassForm;
   inlineDayEdit = false;
+  inlineEditTemplateId = null;
   if(!showAddClassForm){ editingOverrideId = null; singleDayFormPrefill = null; }
   render();
 }
 
-async function quickEditOccurrence(iso, templateId){
+function quickEditOccurrence(iso, templateId){
   const tmpl = data.classes.find(c=>c.id===templateId);
   if(!tmpl) return;
-  await quickCancelOccurrence(iso, templateId);
   dayOverrideDate = iso;
   showAddClassForm = true;
   classFormMode = 'single';
   editingClassId = null;
   editingOverrideId = null;
   inlineDayEdit = true;
+  inlineEditTemplateId = templateId;
   singleDayFormPrefill = { title:tmpl.title, teacher:tmpl.teacher, time:tmpl.time, cap:tmpl.cap, location:tmpl.location||'', description:tmpl.description||'' };
   render();
-  showToast('已停開原本這天的課，修改後按「儲存」即可');
+}
+function editModifyOverride(iso, templateId, modifyId){
+  const mod = dayOverrides.find(o=>o.id===modifyId);
+  if(!mod) return;
+  dayOverrideDate = iso;
+  showAddClassForm = true;
+  classFormMode = 'single';
+  editingClassId = null;
+  editingOverrideId = modifyId;
+  inlineDayEdit = true;
+  inlineEditTemplateId = templateId;
+  singleDayFormPrefill = { title:mod.title, teacher:mod.teacher, time:mod.time, cap:mod.cap, location:mod.location||'', description:mod.description||'' };
+  render();
+}
+async function revertModifyOverride(modifyId){
+  const { error } = await db.from('class_overrides').delete().eq('id', modifyId);
+  if(error){ showToast('還原失敗'); console.error(error); return; }
+  await loadDayOverrides();
+  render();
+  showToast('已還原為原本的課程');
+}
+async function saveModifyOverride(){
+  const title = document.getElementById('ovExtraTitle').value.trim();
+  const teacher = document.getElementById('ovExtraTeacher').value;
+  const time = document.getElementById('ovExtraTime').value;
+  const cap = Number(document.getElementById('ovExtraCap').value)||12;
+  const location = document.getElementById('ovExtraLocation').value.trim();
+  const description = document.getElementById('ovExtraDescription').value.trim();
+  if(!title){ showToast('請輸入課程名稱'); return; }
+  if(editingOverrideId){
+    const { error } = await db.from('class_overrides').update({ title, teacher, time, cap, location, description }).eq('id', editingOverrideId);
+    if(error){ showToast('儲存失敗'); console.error(error); return; }
+  } else {
+    const { error } = await db.from('class_overrides').insert({ type:'modify', date:dayOverrideDate, class_template_id:inlineEditTemplateId, title, teacher, time, cap, location, description });
+    if(error){ showToast('儲存失敗'); console.error(error); return; }
+  }
+  editingOverrideId = null;
+  singleDayFormPrefill = null;
+  showAddClassForm = false;
+  inlineDayEdit = false;
+  inlineEditTemplateId = null;
+  await loadDayOverrides();
+  render();
+  showToast('已儲存修改');
 }
 
 function startEditExtraOverride(id){
@@ -933,6 +994,7 @@ function startEditExtraOverride(id){
   classFormMode = 'single';
   editingClassId = null;
   inlineDayEdit = true;
+  inlineEditTemplateId = null;
   render();
 }
 function cancelEditExtraOverride(){
@@ -940,6 +1002,7 @@ function cancelEditExtraOverride(){
   singleDayFormPrefill = null;
   showAddClassForm = false;
   inlineDayEdit = false;
+  inlineEditTemplateId = null;
   render();
 }
 async function saveExtraOverrideEdit(){
@@ -957,6 +1020,7 @@ async function saveExtraOverrideEdit(){
   singleDayFormPrefill = null;
   showAddClassForm = false;
   inlineDayEdit = false;
+  inlineEditTemplateId = null;
   await loadDayOverrides();
   render();
   showToast('已儲存修改');
@@ -1223,6 +1287,7 @@ async function addExtraOverride(){
   showAddClassForm = false;
   singleDayFormPrefill = null;
   inlineDayEdit = false;
+  inlineEditTemplateId = null;
   await loadDayOverrides();
   render();
   showToast(`已儲存 ${dayOverrideDate} 的課程`);
