@@ -1273,18 +1273,13 @@ function pageClasses(){
             例如想「開放兩個月後的那一週」，開始日期填兩個月後的週一、結束日期填那週的週日即可。
             ${n.booking_open_start && n.booking_open_end
               ? `<br><b style="color:var(--sage-dark);">目前開放：${n.booking_open_start} ～ ${n.booking_open_end}</b>`
-              : `<br><b style="color:var(--muted);">目前尚未設定，暫時使用預設規則（開放未來 ${n.booking_window_days} 天）</b>`}
+              : `<br><b style="color:var(--muted);">目前尚未設定</b>`}
           </div>
           <div class="form-grid">
             <div class="field"><label>開始日期</label><input id="bwStart" type="date" value="${n.booking_open_start||''}"></div>
             <div class="field"><label>結束日期</label><input id="bwEnd" type="date" value="${n.booking_open_end||''}"></div>
           </div>
           <div style="display:flex;gap:8px;margin-top:10px;justify-content:flex-end;align-items:center;flex-wrap:wrap;">
-            <label style="font-size:12px;color:var(--muted);">未設定區間時，預設開放未來
-              <input type="number" value="${n.booking_window_days}" style="width:55px;border:1px solid var(--line);border-radius:8px;padding:5px 8px;font-size:12.5px;" onchange="updateNotify('booking_window_days', Number(this.value))">
-              天
-            </label>
-            <button class="btn btn-ghost btn-sm" onclick="clearBookingWindow()">清除設定（改回預設規則）</button>
             <button class="btn btn-primary btn-sm" onclick="saveBookingWindow()">套用這段區間</button>
           </div>
         </div>
