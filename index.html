@@ -813,7 +813,7 @@ function buildDayDetailHTML(){
 
   let rowsHtml = '';
   recurring.forEach(c=>{
-    const modNote = c._modified ? ' <span style="color:var(--sage-dark);font-size:12px;">（已修改）</span>' : '';
+    const modNote = '';
     rowsHtml += `
     <div class="settings-row">
       <div><div class="label">${c.time}　${c.title}（${c.teacher}）${modNote}</div><div class="desc">固定課程</div></div>
