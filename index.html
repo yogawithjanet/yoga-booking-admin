@@ -830,9 +830,35 @@ function buildDayDetailHTML(){
     <button class="btn btn-primary btn-sm" onclick="openSingleDayFormFor('${iso}')">＋ 加開這一天的課</button>`;
   else rowsHtml += `<div style="margin-top:10px;"><button class="btn btn-ghost btn-sm" onclick="openSingleDayFormFor('${iso}')">＋ 再加開一堂特別課</button></div>`;
 
+  let inlineFormHtml = '';
+  if(inlineDayEdit && showAddClassForm && classFormMode === 'single'){
+    const pf = singleDayFormPrefill || {};
+    inlineFormHtml = `
+    <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--line);" id="classFormPanel">
+      <div class="label" style="margin-bottom:12px;">${editingOverrideId ? '編輯特別課' : '修改這天的課程'}</div>
+      <div class="form-grid">
+        <div class="field"><label>課程名稱</label><input id="ovExtraTitle" placeholder="例如：中秋特別班" value="${pf.title||''}"></div>
+        <div class="field"><label>授課老師</label>
+          <select id="ovExtraTeacher">${data.teachers.map(t=>`<option value="${t.name}" ${pf.teacher===t.name?'selected':''}>${t.name}</option>`).join('')}</select>
+        </div>
+        <div class="field"><label>上課地點（選填）</label><input id="ovExtraLocation" placeholder="例如：忠孝教室" value="${pf.location||''}"></div>
+        <div class="field"><label>上課時間</label><input id="ovExtraTime" type="time" value="${pf.time||'10:00'}"></div>
+        <div class="field"><label>人數上限</label><input id="ovExtraCap" type="number" value="${pf.cap||12}"></div>
+        <div class="field" style="grid-column:1/-1;"><label>課程介紹（選填）</label><textarea id="ovExtraDescription" style="min-height:60px;">${pf.description||''}</textarea></div>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:12px;">
+        <button class="btn btn-ghost" onclick="cancelEditExtraOverride()">取消</button>
+        ${editingOverrideId
+          ? `<button class="btn btn-primary" onclick="saveExtraOverrideEdit()">儲存修改</button>`
+          : `<button class="btn btn-primary" onclick="addExtraOverride()">儲存</button>`}
+      </div>
+    </div>`;
+  }
+
   return `
     <div class="label" style="margin-bottom:6px;">${label}</div>
-    ${rowsHtml}`;
+    ${rowsHtml}
+    ${inlineFormHtml}`;
 }
 function openSingleDayFormFor(iso){
   dayOverrideDate = iso;
@@ -840,12 +866,9 @@ function openSingleDayFormFor(iso){
   classFormMode = 'single';
   editingClassId = null;
   editingOverrideId = null;
+  inlineDayEdit = true;
   singleDayFormPrefill = null;
   render();
-  setTimeout(()=>{
-    const el = document.getElementById('classFormPanel');
-    if(el) el.scrollIntoView({behavior:'smooth', block:'center'});
-  }, 60);
 }
 
 function selectClassesCalendarDate(iso){
@@ -875,10 +898,12 @@ let classFormMode = 'recurring'; // 'recurring'（每週固定）| 'single'（�
 let showAddClassForm = false;    // 表單預設收起，避免畫面太滿
 let editingOverrideId = null;    // 目前正在編輯的特別課（單日加開）id
 let singleDayFormPrefill = null; // 開啟「只有這一天」表單時，預先帶入的內容
+let inlineDayEdit = false;       // 從日曆觸發的單日編輯，表單顯示在日曆內而非上方範本面板
 
 function setClassFormMode(mode){ classFormMode = mode; render(); }
 function toggleAddClassForm(){
   showAddClassForm = !showAddClassForm;
+  inlineDayEdit = false;
   if(!showAddClassForm){ editingOverrideId = null; singleDayFormPrefill = null; }
   render();
 }
@@ -886,19 +911,16 @@ function toggleAddClassForm(){
 async function quickEditOccurrence(iso, templateId){
   const tmpl = data.classes.find(c=>c.id===templateId);
   if(!tmpl) return;
-  await quickCancelOccurrence(iso, templateId); // 先停開原本這天的固定課，改用下面的特別課取代
+  await quickCancelOccurrence(iso, templateId);
   dayOverrideDate = iso;
   showAddClassForm = true;
   classFormMode = 'single';
   editingClassId = null;
-  editingOverrideId = null; // 這是新增一堂特別課，不是編輯既有的
+  editingOverrideId = null;
+  inlineDayEdit = true;
   singleDayFormPrefill = { title:tmpl.title, teacher:tmpl.teacher, time:tmpl.time, cap:tmpl.cap, location:tmpl.location||'', description:tmpl.description||'' };
   render();
-  setTimeout(()=>{
-    const el = document.getElementById('classFormPanel');
-    if(el) el.scrollIntoView({behavior:'smooth', block:'center'});
-  }, 60);
-  showToast('已停開原本這天的課，內容已幫你帶到下方表單，改完直接送出即可');
+  showToast('已停開原本這天的課，修改後按「儲存」即可');
 }
 
 function startEditExtraOverride(id){
@@ -910,16 +932,14 @@ function startEditExtraOverride(id){
   showAddClassForm = true;
   classFormMode = 'single';
   editingClassId = null;
+  inlineDayEdit = true;
   render();
-  setTimeout(()=>{
-    const el = document.getElementById('classFormPanel');
-    if(el) el.scrollIntoView({behavior:'smooth', block:'center'});
-  }, 60);
 }
 function cancelEditExtraOverride(){
   editingOverrideId = null;
   singleDayFormPrefill = null;
   showAddClassForm = false;
+  inlineDayEdit = false;
   render();
 }
 async function saveExtraOverrideEdit(){
@@ -936,6 +956,7 @@ async function saveExtraOverrideEdit(){
   editingOverrideId = null;
   singleDayFormPrefill = null;
   showAddClassForm = false;
+  inlineDayEdit = false;
   await loadDayOverrides();
   render();
   showToast('已儲存修改');
@@ -967,7 +988,7 @@ function pageClasses(){
 
   const editing = editingClassId ? data.classes.find(c=>c.id===editingClassId) : null;
   const selectedDays = editing ? (editing.weekdays||[]) : [];
-  const formOpen = editing || showAddClassForm;
+  const formOpen = editing || (showAddClassForm && !inlineDayEdit);
 
   // 停課＆特別課清單（合併成一張表，按月份篩選，可排序）
   let exceptionRows = [
@@ -1199,9 +1220,12 @@ async function addExtraOverride(){
   if(!teacher){ showToast('請先在「老師管理」新增至少一位老師'); return; }
   const { error } = await db.from('class_overrides').insert({ type:'extra', date:dayOverrideDate, title, teacher, time, duration:60, cap, location, description });
   if(error){ showToast('新增失敗'); console.error(error); return; }
+  showAddClassForm = false;
+  singleDayFormPrefill = null;
+  inlineDayEdit = false;
   await loadDayOverrides();
   render();
-  showToast(`已在 ${dayOverrideDate} 加開這堂特別課`);
+  showToast(`已儲存 ${dayOverrideDate} 的課程`);
 }
 async function removeOverride(id){
   const { error } = await db.from('class_overrides').delete().eq('id', id);
