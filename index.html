@@ -1183,10 +1183,10 @@ function pageClasses(){
         </tr></thead>
         <tbody>${exceptionRows.map(r=>`
           <tr>
-            <td style="white-space:nowrap">${r.date}</td>
-            <td style="white-space:nowrap"><span style="display:inline-block;padding:2px 12px;border-radius:10px;font-size:11px;font-weight:600;background:#fff;border:1.5px solid ${r.danger?'var(--muted)':'var(--sage)'};color:${r.danger?'var(--muted)':'var(--sage-dark)'}">${r.type}</span></td>
-            <td>${r.label}</td>
-            <td><div class="row-actions"><button class="btn btn-ghost btn-sm" onclick="removeOverride('${r.id}')">移除</button></div></td>
+            <td style="white-space:nowrap;padding-right:8px">${r.date}</td>
+            <td style="white-space:nowrap;padding-left:0;padding-right:8px"><span style="display:inline-block;padding:2px 12px;border-radius:10px;font-size:11px;font-weight:600;background:#fff;border:1.5px solid ${r.danger?'var(--muted)':'var(--sage)'};color:${r.danger?'var(--muted)':'var(--sage-dark)'}">${r.type}</span></td>
+            <td style="padding-left:0">${r.label}</td>
+            <td style="padding-left:0"><div class="row-actions"><button class="btn btn-ghost btn-sm" onclick="removeOverride('${r.id}')">移除</button></div></td>
           </tr>`).join('')}</tbody></table>
         ` : `<div style="text-align:center;color:var(--muted);padding:24px;">${exceptionMonthLabel} 沒有停課或特別課紀錄</div>`}
       </div>
