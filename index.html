@@ -830,7 +830,6 @@ function buildDayDetailHTML(){
     <div class="settings-row">
       <div><div class="label">${o.time}　${o.title}（${o.teacher}）</div><div class="desc">⭐ 這天加開的特別課</div></div>
       <div class="row-actions">
-        <button class="btn btn-ghost btn-sm" onclick="convertExtraToModify('${o.id}')" title="把這堂課改回一般課程（不再標示為特別課）">改為一般課程</button>
         <button class="btn btn-ghost btn-sm" onclick="startEditExtraOverride('${o.id}')">編輯</button>
         <button class="btn btn-danger btn-sm" onclick="removeOverride('${o.id}')">刪除</button>
       </div>
@@ -980,7 +979,12 @@ async function saveModifyOverride(){
   const description = document.getElementById('ovExtraDescription').value.trim();
   if(!title){ showToast('請輸入課程名稱'); return; }
   if(editingOverrideId){
-    const { error } = await db.from('class_overrides').update({ title, teacher, time, cap, location, description }).eq('id', editingOverrideId);
+    const existing = dayOverrides.find(o=>o.id===editingOverrideId);
+    if(existing && existing.type==='extra'){
+      const cancel = dayOverrides.find(c=>c.type==='cancel' && c.date===existing.date && c.class_template_id===inlineEditTemplateId);
+      if(cancel) await db.from('class_overrides').delete().eq('id', cancel.id);
+    }
+    const { error } = await db.from('class_overrides').update({ type:'modify', class_template_id:inlineEditTemplateId, title, teacher, time, cap, location, description }).eq('id', editingOverrideId);
     if(error){ showToast('儲存失敗'); console.error(error); return; }
   } else {
     const { error } = await db.from('class_overrides').insert({ type:'modify', date:dayOverrideDate, class_template_id:inlineEditTemplateId, title, teacher, time, cap, location, description });
@@ -1063,7 +1067,14 @@ function startEditExtraOverride(id){
   classFormMode = 'single';
   editingClassId = null;
   inlineDayEdit = true;
-  inlineEditTemplateId = null;
+  const matchCancel = dayOverrides.find(c=>c.type==='cancel' && c.date===o.date && c.class_template_id);
+  if(matchCancel){
+    inlineEditTemplateId = matchCancel.class_template_id;
+    inlineEditAsExtra = true;
+  } else {
+    inlineEditTemplateId = null;
+    inlineEditAsExtra = false;
+  }
   render();
 }
 function cancelEditExtraOverride(){
