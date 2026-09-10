@@ -819,8 +819,7 @@ function buildDayDetailHTML(){
       <div><div class="label">${c.time}　${c.title}（${c.teacher}）${modNote}</div><div class="desc">固定課程</div></div>
       <div class="row-actions">
         ${c._modified
-          ? `<button class="btn btn-ghost btn-sm" onclick="editModifyOverride('${iso}','${c.id}','${c._modifyId}')">編輯</button>
-             <button class="btn btn-ghost btn-sm" onclick="revertModifyOverride('${c._modifyId}')">還原</button>`
+          ? `<button class="btn btn-ghost btn-sm" onclick="editModifyOverride('${iso}','${c.id}','${c._modifyId}')">編輯</button>`
           : `<button class="btn btn-ghost btn-sm" onclick="quickEditOccurrence('${iso}','${c.id}')">只修改這天</button>`}
         <button class="btn btn-danger btn-sm" onclick="quickCancelOccurrence('${iso}','${c.id}')">停開這天</button>
       </div>
@@ -845,15 +844,20 @@ function buildDayDetailHTML(){
   let inlineFormHtml = '';
   if(inlineDayEdit && showAddClassForm && classFormMode === 'single'){
     const pf = singleDayFormPrefill || {};
-    const isModify = !!inlineEditTemplateId;
-    const formLabel = isModify ? '修改這天的課程' : (editingOverrideId ? '編輯特別課' : '加開特別課');
+    const hasTemplate = !!inlineEditTemplateId;
+    const useModify = hasTemplate && !inlineEditAsExtra;
     let saveBtn;
-    if(isModify) saveBtn = `<button class="btn btn-primary" onclick="saveModifyOverride()">儲存</button>`;
-    else if(editingOverrideId) saveBtn = `<button class="btn btn-primary" onclick="saveExtraOverrideEdit()">儲存修改</button>`;
-    else saveBtn = `<button class="btn btn-primary" onclick="addExtraOverride()">儲存</button>`;
+    if(useModify) saveBtn = `<button class="btn btn-primary" onclick="saveModifyOverride()">儲存</button>`;
+    else if(editingOverrideId && !hasTemplate) saveBtn = `<button class="btn btn-primary" onclick="saveExtraOverrideEdit()">儲存修改</button>`;
+    else saveBtn = `<button class="btn btn-primary" onclick="saveAsExtra()">儲存</button>`;
+    const toggleHtml = hasTemplate ? `
+      <div style="display:flex;gap:6px;margin-bottom:14px;">
+        <button class="btn ${!inlineEditAsExtra?'btn-primary':'btn-ghost'} btn-sm" onclick="toggleInlineEditType(false)">固定課</button>
+        <button class="btn ${inlineEditAsExtra?'btn-primary':'btn-ghost'} btn-sm" onclick="toggleInlineEditType(true)">特別課</button>
+      </div>` : '';
     inlineFormHtml = `
     <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--line);" id="classFormPanel">
-      <div class="label" style="margin-bottom:12px;">${formLabel}</div>
+      ${toggleHtml}
       <div class="form-grid">
         <div class="field"><label>課程名稱</label><input id="ovExtraTitle" placeholder="例如：中秋特別班" value="${pf.title||''}"></div>
         <div class="field"><label>授課老師</label>
@@ -917,6 +921,11 @@ let editingOverrideId = null;    // 目前正在編輯的特別課（單日加�
 let singleDayFormPrefill = null; // 開啟「只有這一天」表單時，預先帶入的內容
 let inlineDayEdit = false;       // 從日曆觸發的單日編輯，表單顯示在日曆內而非上方範本面板
 let inlineEditTemplateId = null; // 正在修改的範本 ID（type='modify'），null 則是加開特別課（type='extra'）
+let inlineEditAsExtra = false;   // 切換：false=固定課（modify），true=特別課（extra）
+function toggleInlineEditType(asExtra){
+  inlineEditAsExtra = asExtra;
+  render();
+}
 
 function setClassFormMode(mode){ classFormMode = mode; render(); }
 function toggleAddClassForm(){
@@ -937,6 +946,7 @@ function quickEditOccurrence(iso, templateId){
   editingOverrideId = null;
   inlineDayEdit = true;
   inlineEditTemplateId = templateId;
+  inlineEditAsExtra = false;
   singleDayFormPrefill = { title:tmpl.title, teacher:tmpl.teacher, time:tmpl.time, cap:tmpl.cap, location:tmpl.location||'', description:tmpl.description||'' };
   render();
 }
@@ -950,6 +960,7 @@ function editModifyOverride(iso, templateId, modifyId){
   editingOverrideId = modifyId;
   inlineDayEdit = true;
   inlineEditTemplateId = templateId;
+  inlineEditAsExtra = false;
   singleDayFormPrefill = { title:mod.title, teacher:mod.teacher, time:mod.time, cap:mod.cap, location:mod.location||'', description:mod.description||'' };
   render();
 }
@@ -983,6 +994,36 @@ async function saveModifyOverride(){
   await loadDayOverrides();
   render();
   showToast('已儲存修改');
+}
+
+async function saveAsExtra(){
+  const title = document.getElementById('ovExtraTitle').value.trim();
+  const teacher = document.getElementById('ovExtraTeacher').value;
+  const time = document.getElementById('ovExtraTime').value;
+  const cap = Number(document.getElementById('ovExtraCap').value)||12;
+  const location = document.getElementById('ovExtraLocation').value.trim();
+  const description = document.getElementById('ovExtraDescription').value.trim();
+  if(!title){ showToast('請輸入課程名稱'); return; }
+  if(inlineEditTemplateId){
+    const already = dayOverrides.some(o=>o.type==='cancel' && o.date===dayOverrideDate && o.class_template_id===inlineEditTemplateId);
+    if(!already){
+      await db.from('class_overrides').insert({ type:'cancel', date:dayOverrideDate, class_template_id:inlineEditTemplateId });
+    }
+  }
+  if(editingOverrideId){
+    await db.from('class_overrides').update({ type:'extra', title, teacher, time, cap, location, description, class_template_id:null }).eq('id', editingOverrideId);
+  } else {
+    await db.from('class_overrides').insert({ type:'extra', date:dayOverrideDate, title, teacher, time, duration:60, cap, location, description });
+  }
+  editingOverrideId = null;
+  singleDayFormPrefill = null;
+  showAddClassForm = false;
+  inlineDayEdit = false;
+  inlineEditTemplateId = null;
+  inlineEditAsExtra = false;
+  await loadDayOverrides();
+  render();
+  showToast('已儲存為特別課');
 }
 
 async function convertExtraToModify(extraId){
@@ -1031,6 +1072,7 @@ function cancelEditExtraOverride(){
   showAddClassForm = false;
   inlineDayEdit = false;
   inlineEditTemplateId = null;
+  inlineEditAsExtra = false;
   render();
 }
 async function saveExtraOverrideEdit(){
