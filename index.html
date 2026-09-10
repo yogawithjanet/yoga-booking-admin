@@ -1184,7 +1184,7 @@ function pageClasses(){
         <tbody>${exceptionRows.map(r=>`
           <tr>
             <td>${r.date}</td>
-            <td><span class="tag ${r.danger?'off':'on'}">${r.type}</span></td>
+            <td><span style="display:inline-block;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:600;background:#fff;border:1.5px solid ${r.danger?'var(--muted)':'var(--sage)'};color:${r.danger?'var(--muted)':'var(--sage-dark)'}">${r.type}</span></td>
             <td>${r.label}</td>
             <td><div class="row-actions"><button class="btn btn-ghost btn-sm" onclick="removeOverride('${r.id}')">移除</button></div></td>
           </tr>`).join('')}</tbody></table>
