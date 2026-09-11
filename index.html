@@ -3114,7 +3114,9 @@ let editingTransactionId = null;
 let cashflowRankingPage = 1;
 const CASHFLOW_RANKING_PAGE_SIZE = 10;
 let cashflowTrendMonths = 6;
-let cashflowChartMode = 'trend'; // 'trend'（近期趨勢） 或 'yearCompare'（今年 vs 去年）
+let cashflowChartMode = 'trend';
+let financeAmountVisible = false;
+function toggleFinanceAmountVisible(){ financeAmountVisible = !financeAmountVisible; render(); }
 function setCashflowChartMode(mode){
   cashflowChartMode = mode;
   render();
@@ -3480,14 +3482,22 @@ function pageCashflow(){
     .map(([uid, total], i)=> `<tr><td>${rankingStart + i + 1}</td><td>${memberName(uid)}</td><td>NT$ ${total.toLocaleString()}</td></tr>`).join('');
 
   return `
-    <div class="page-title">金流管理</div>
+    <div style="display:flex;align-items:center;gap:10px;">
+      <div class="page-title" style="margin:0;">金流管理</div>
+      <button onclick="toggleFinanceAmountVisible()" style="border:none;background:none;cursor:pointer;padding:4px;line-height:1;opacity:.55;" title="${financeAmountVisible?'隱藏金額':'顯示金額'}">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
+          ${financeAmountVisible?'':'<line x1="2" y1="2" x2="22" y2="22" stroke-width="2.5"/>'}
+        </svg>
+      </button>
+    </div>
     <div class="page-sub">收入／支出都可以在下面手動新增，或是在學員的「新增堂數」順便填實收金額自動產生一筆收入。淨利＝收入－支出。</div>
 
     <div class="stat-cards">
-      <div class="stat-card"><div class="num">NT$ ${thisMonthIncome.toLocaleString()}</div><div class="lbl">本月收入</div></div>
-      <div class="stat-card"><div class="num">NT$ ${thisMonthExpense.toLocaleString()}</div><div class="lbl">本月支出</div></div>
-      <div class="stat-card"><div class="num">NT$ ${(thisMonthIncome-thisMonthExpense).toLocaleString()}</div><div class="lbl">本月淨利</div></div>
-      <div class="stat-card"><div class="num">NT$ ${(hasFilter ? (filteredIncome-filteredExpense) : (thisYearIncome-thisYearExpense)).toLocaleString()}</div><div class="lbl">${hasFilter ? '篩選區間淨利' : '今年度全部總淨利'}</div></div>
+      <div class="stat-card"><div class="num">${financeAmountVisible ? 'NT$ '+thisMonthIncome.toLocaleString() : '＊＊＊'}</div><div class="lbl">本月收入</div></div>
+      <div class="stat-card"><div class="num">${financeAmountVisible ? 'NT$ '+thisMonthExpense.toLocaleString() : '＊＊＊'}</div><div class="lbl">本月支出</div></div>
+      <div class="stat-card"><div class="num">${financeAmountVisible ? 'NT$ '+(thisMonthIncome-thisMonthExpense).toLocaleString() : '＊＊＊'}</div><div class="lbl">本月淨利</div></div>
+      <div class="stat-card"><div class="num">${financeAmountVisible ? 'NT$ '+(hasFilter ? (filteredIncome-filteredExpense) : (thisYearIncome-thisYearExpense)).toLocaleString() : '＊＊＊'}</div><div class="lbl">${hasFilter ? '篩選區間淨利' : '今年度全部總淨利'}</div></div>
     </div>
 
     <div class="two-col-row">
