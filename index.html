@@ -858,6 +858,7 @@ function buildDayDetailHTML(){
     <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--line);" id="classFormPanel">
       ${toggleHtml}
       <div class="form-grid">
+        <div class="field"><label>日期</label><input id="ovExtraDate" type="date" value="${dayOverrideDate}"></div>
         <div class="field"><label>課程名稱</label><input id="ovExtraTitle" placeholder="例如：中秋特別班" value="${pf.title||''}"></div>
         <div class="field"><label>授課老師</label>
           <select id="ovExtraTeacher">${data.teachers.map(t=>`<option value="${t.name}" ${pf.teacher===t.name?'selected':''}>${t.name}</option>`).join('')}</select>
@@ -971,12 +972,14 @@ async function revertModifyOverride(modifyId){
   showToast('已還原為原本的課程');
 }
 async function saveModifyOverride(){
+  const formDate = document.getElementById('ovExtraDate').value;
   const title = document.getElementById('ovExtraTitle').value.trim();
   const teacher = document.getElementById('ovExtraTeacher').value;
   const time = document.getElementById('ovExtraTime').value;
   const cap = Number(document.getElementById('ovExtraCap').value)||12;
   const location = document.getElementById('ovExtraLocation').value.trim();
   const description = document.getElementById('ovExtraDescription').value.trim();
+  if(!formDate){ showToast('請選擇日期'); return; }
   if(!title){ showToast('請輸入課程名稱'); return; }
   if(editingOverrideId){
     const existing = dayOverrides.find(o=>o.id===editingOverrideId);
@@ -984,10 +987,10 @@ async function saveModifyOverride(){
       const cancel = dayOverrides.find(c=>c.type==='cancel' && c.date===existing.date && c.class_template_id===inlineEditTemplateId);
       if(cancel) await db.from('class_overrides').delete().eq('id', cancel.id);
     }
-    const { error } = await db.from('class_overrides').update({ type:'modify', class_template_id:inlineEditTemplateId, title, teacher, time, cap, location, description }).eq('id', editingOverrideId);
+    const { error } = await db.from('class_overrides').update({ type:'modify', date:formDate, class_template_id:inlineEditTemplateId, title, teacher, time, cap, location, description }).eq('id', editingOverrideId);
     if(error){ showToast('儲存失敗'); console.error(error); return; }
   } else {
-    const { error } = await db.from('class_overrides').insert({ type:'modify', date:dayOverrideDate, class_template_id:inlineEditTemplateId, title, teacher, time, cap, location, description });
+    const { error } = await db.from('class_overrides').insert({ type:'modify', date:formDate, class_template_id:inlineEditTemplateId, title, teacher, time, cap, location, description });
     if(error){ showToast('儲存失敗'); console.error(error); return; }
   }
   editingOverrideId = null;
@@ -1001,23 +1004,25 @@ async function saveModifyOverride(){
 }
 
 async function saveAsExtra(){
+  const formDate = document.getElementById('ovExtraDate').value;
   const title = document.getElementById('ovExtraTitle').value.trim();
   const teacher = document.getElementById('ovExtraTeacher').value;
   const time = document.getElementById('ovExtraTime').value;
   const cap = Number(document.getElementById('ovExtraCap').value)||12;
   const location = document.getElementById('ovExtraLocation').value.trim();
   const description = document.getElementById('ovExtraDescription').value.trim();
+  if(!formDate){ showToast('請選擇日期'); return; }
   if(!title){ showToast('請輸入課程名稱'); return; }
   if(inlineEditTemplateId){
-    const already = dayOverrides.some(o=>o.type==='cancel' && o.date===dayOverrideDate && o.class_template_id===inlineEditTemplateId);
+    const already = dayOverrides.some(o=>o.type==='cancel' && o.date===formDate && o.class_template_id===inlineEditTemplateId);
     if(!already){
-      await db.from('class_overrides').insert({ type:'cancel', date:dayOverrideDate, class_template_id:inlineEditTemplateId });
+      await db.from('class_overrides').insert({ type:'cancel', date:formDate, class_template_id:inlineEditTemplateId });
     }
   }
   if(editingOverrideId){
-    await db.from('class_overrides').update({ type:'extra', title, teacher, time, cap, location, description, class_template_id:null }).eq('id', editingOverrideId);
+    await db.from('class_overrides').update({ type:'extra', date:formDate, title, teacher, time, cap, location, description, class_template_id:null }).eq('id', editingOverrideId);
   } else {
-    await db.from('class_overrides').insert({ type:'extra', date:dayOverrideDate, title, teacher, time, duration:60, cap, location, description });
+    await db.from('class_overrides').insert({ type:'extra', date:formDate, title, teacher, time, duration:60, cap, location, description });
   }
   editingOverrideId = null;
   singleDayFormPrefill = null;
@@ -1087,15 +1092,17 @@ function cancelEditExtraOverride(){
   render();
 }
 async function saveExtraOverrideEdit(){
+  const formDate = document.getElementById('ovExtraDate').value;
   const title = document.getElementById('ovExtraTitle').value.trim();
   const teacher = document.getElementById('ovExtraTeacher').value;
   const time = document.getElementById('ovExtraTime').value;
   const cap = Number(document.getElementById('ovExtraCap').value)||12;
   const location = document.getElementById('ovExtraLocation').value.trim();
   const description = document.getElementById('ovExtraDescription').value.trim();
+  if(!formDate){ showToast('請選擇日期'); return; }
   if(!title){ showToast('請輸入課程名稱'); return; }
   if(!teacher){ showToast('請先在「老師管理」新增至少一位老師'); return; }
-  const { error } = await db.from('class_overrides').update({ title, teacher, time, cap, location, description }).eq('id', editingOverrideId);
+  const { error } = await db.from('class_overrides').update({ date:formDate, title, teacher, time, cap, location, description }).eq('id', editingOverrideId);
   if(error){ showToast('儲存失敗'); console.error(error); return; }
   editingOverrideId = null;
   singleDayFormPrefill = null;
