@@ -1563,6 +1563,7 @@ function pageAnnouncement(){
 }
 /* ================= 關於我們 ================= */
 let pendingAboutImage = undefined;
+let aboutDirty = false;
 function pageAbout(){
   const s = data.store;
   const links = Array.isArray(s.about_links) ? s.about_links : [];
@@ -1580,10 +1581,10 @@ function pageAbout(){
             ${previewImage ? `<div style="margin-bottom:8px;"><img src="${previewImage}" style="max-width:100%;max-height:200px;border-radius:10px;"></div>` : ''}
             <div style="display:flex;gap:8px;">
               <input type="file" accept="image/*" onchange="handleAboutImageUpload(event)" style="font-size:12px;">
-              ${previewImage ? `<button class="btn btn-ghost btn-sm" onclick="pendingAboutImage='';render()">移除照片</button>` : ''}
+              ${previewImage ? `<button class="btn btn-ghost btn-sm" onclick="pendingAboutImage='';aboutDirty=true;render()">移除照片</button>` : ''}
             </div>
           </div>
-          <div class="field" style="grid-column:1/-1;"><label>介紹文字</label><textarea id="aboutText" style="min-height:120px;" placeholder="介紹你的教室、理念、課程特色...">${s.about_text||''}</textarea></div>
+          <div class="field" style="grid-column:1/-1;"><label>介紹文字</label><textarea id="aboutText" style="min-height:120px;" placeholder="介紹你的教室、理念、課程特色..." oninput="aboutDirty=true">${s.about_text||''}</textarea></div>
         </div>
         <div style="margin-top:12px;"><button class="btn btn-primary" onclick="saveAboutContent()">儲存內容</button></div>
       </div>
@@ -1595,8 +1596,8 @@ function pageAbout(){
         ${links.map((link,i)=>`
           <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;padding:10px;border:1px solid var(--line);border-radius:10px;">
             <div style="flex:1;min-width:0;">
-              <input id="aboutLinkLabel${i}" value="${link.label}" placeholder="按鈕文字" style="width:100%;margin-bottom:6px;border:1px solid var(--line);border-radius:8px;padding:6px 10px;font-size:13px;">
-              <input id="aboutLinkUrl${i}" value="${link.url}" placeholder="https://..." style="width:100%;border:1px solid var(--line);border-radius:8px;padding:6px 10px;font-size:13px;">
+              <input id="aboutLinkLabel${i}" value="${link.label}" placeholder="按鈕文字" style="width:100%;margin-bottom:6px;border:1px solid var(--line);border-radius:8px;padding:6px 10px;font-size:13px;" oninput="aboutDirty=true">
+              <input id="aboutLinkUrl${i}" value="${link.url}" placeholder="https://..." style="width:100%;border:1px solid var(--line);border-radius:8px;padding:6px 10px;font-size:13px;" oninput="aboutDirty=true">
             </div>
             <button class="btn btn-ghost btn-sm" onclick="removeAboutLink(${i})">刪除</button>
           </div>
@@ -1612,20 +1613,24 @@ function pageAbout(){
 function handleAboutImageUpload(e){
   const file = e.target.files[0];
   if(!file) return;
-  if(file.size > 500*1024){ showToast('圖片請小於 500KB'); return; }
+  if(file.size > 2*1024*1024){ showToast('圖片請小於 2MB'); return; }
   const reader = new FileReader();
-  reader.onload = ()=>{ pendingAboutImage = reader.result; render(); };
+  reader.onload = ()=>{ pendingAboutImage = reader.result; aboutDirty = true; render(); };
   reader.readAsDataURL(file);
 }
+function collectAboutText(){
+  const el = document.getElementById('aboutText');
+  return el ? el.value.trim() : (data.store.about_text||'');
+}
 async function saveAboutContent(){
-  const about_text = document.getElementById('aboutText').value.trim();
+  const about_text = collectAboutText();
   const payload = { about_text };
   if(pendingAboutImage !== undefined) payload.about_image = pendingAboutImage;
   const { error } = await db.from('store_settings').update(payload).eq('id', 1);
   if(error){ showToast('儲存失敗'); console.error(error); return; }
-  data.store.about_text = about_text;
-  if(pendingAboutImage !== undefined) data.store.about_image = pendingAboutImage;
+  await loadAdminState();
   pendingAboutImage = undefined;
+  aboutDirty = false;
   render();
   showToast('已儲存關於我們的內容');
 }
@@ -1633,12 +1638,14 @@ function addAboutLink(){
   const links = Array.isArray(data.store.about_links) ? [...data.store.about_links] : [];
   links.push({ label:'', url:'' });
   data.store.about_links = links;
+  aboutDirty = true;
   render();
 }
 function removeAboutLink(idx){
   const links = [...(data.store.about_links||[])];
   links.splice(idx, 1);
   data.store.about_links = links;
+  aboutDirty = true;
   render();
 }
 async function saveAboutLinks(){
@@ -1649,9 +1656,14 @@ async function saveAboutLinks(){
   })).filter(l => l.label && l.url);
   const { error } = await db.from('store_settings').update({ about_links: result }).eq('id', 1);
   if(error){ showToast('儲存失敗'); console.error(error); return; }
-  data.store.about_links = result;
+  await loadAdminState();
+  aboutDirty = false;
   render();
   showToast('已儲存連結按鈕');
+}
+function checkAboutUnsaved(){
+  if(!aboutDirty) return true;
+  return confirm('您有尚未儲存的變更，確定要離開嗎？');
 }
 
 async function saveStore(){
@@ -4383,15 +4395,16 @@ function toggleSidebarCollapse(){
 const CURRENT_PAGE_KEY = 'admin-current-page-v1';
 
 async function navigateToPage(page){
+  if(currentPage==='about' && page!=='about' && !checkAboutUnsaved()) return;
   document.querySelectorAll('.nav-item').forEach(i=>i.classList.remove('active'));
   const targetItem = document.querySelector(`.nav-item[data-page="${page}"]`);
   if(targetItem) targetItem.classList.add('active');
   currentPage = page;
-  localStorage.setItem(CURRENT_PAGE_KEY, page); // 記住目前頁面，重新整理後可以回到同一頁
+  localStorage.setItem(CURRENT_PAGE_KEY, page);
   selectedMemberId = null; memberBookings = [];
   editingClassId = null;
   if(page==='announcement'){ pendingAnnouncementImage = undefined; }
-  if(page==='about'){ pendingAboutImage = undefined; }
+  if(page==='about'){ pendingAboutImage = undefined; aboutDirty = false; }
   if(page==='classes'){ await loadDayOverrides(); }
   if(page==='members'){ await loadMemberStats(); await loadDayOverrides(); }
   if(page==='roster'){ await loadDayOverrides(); await Promise.all([loadRoster(), loadRosterMonthCounts()]); }
