@@ -441,6 +441,7 @@
     </div>
     <div class="nav-item active" data-page="overview"><span class="ic">📊</span><span class="nav-label">店家與安全設定</span></div>
     <div class="nav-item" data-page="announcement"><span class="ic">📢</span><span class="nav-label">公告推播</span></div>
+    <div class="nav-item" data-page="about"><span class="ic">🏠</span><span class="nav-label">關於我們</span></div>
 
     <div class="nav-group-title">學員相關</div>
     <div class="nav-item" data-page="members"><span class="ic">👥</span><span class="nav-label">學員管理</span></div>
@@ -1560,6 +1561,99 @@ function pageAnnouncement(){
     </div>
     </div>`;
 }
+/* ================= 關於我們 ================= */
+let pendingAboutImage = undefined;
+function pageAbout(){
+  const s = data.store;
+  const links = Array.isArray(s.about_links) ? s.about_links : [];
+  const previewImage = pendingAboutImage !== undefined ? pendingAboutImage : (s.about_image||'');
+  return `
+    <div class="page-title">關於我們</div>
+    <div class="page-sub">設定前台「關於我們」頁面的內容，包含照片、介紹文字、以及連結按鈕。</div>
+    <div class="two-col-row">
+    <div class="panel">
+      <div class="panel-head"><h3>頁面內容</h3></div>
+      <div class="panel-body">
+        <div class="form-grid">
+          <div class="field" style="grid-column:1/-1;">
+            <label>照片</label>
+            ${previewImage ? `<div style="margin-bottom:8px;"><img src="${previewImage}" style="max-width:100%;max-height:200px;border-radius:10px;"></div>` : ''}
+            <div style="display:flex;gap:8px;">
+              <input type="file" accept="image/*" onchange="handleAboutImageUpload(event)" style="font-size:12px;">
+              ${previewImage ? `<button class="btn btn-ghost btn-sm" onclick="pendingAboutImage='';render()">移除照片</button>` : ''}
+            </div>
+          </div>
+          <div class="field" style="grid-column:1/-1;"><label>介紹文字</label><textarea id="aboutText" style="min-height:120px;" placeholder="介紹你的教室、理念、課程特色...">${s.about_text||''}</textarea></div>
+        </div>
+        <div style="margin-top:12px;"><button class="btn btn-primary" onclick="saveAboutContent()">儲存內容</button></div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-head"><h3>連結按鈕</h3></div>
+      <div class="panel-body">
+        <div class="desc" style="margin-bottom:12px;">新增按鈕，學生點擊後會跳到指定的網址（例如 Instagram、LINE 官方帳號、Google Maps 等）。</div>
+        ${links.map((link,i)=>`
+          <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;padding:10px;border:1px solid var(--line);border-radius:10px;">
+            <div style="flex:1;min-width:0;">
+              <input id="aboutLinkLabel${i}" value="${link.label}" placeholder="按鈕文字" style="width:100%;margin-bottom:6px;border:1px solid var(--line);border-radius:8px;padding:6px 10px;font-size:13px;">
+              <input id="aboutLinkUrl${i}" value="${link.url}" placeholder="https://..." style="width:100%;border:1px solid var(--line);border-radius:8px;padding:6px 10px;font-size:13px;">
+            </div>
+            <button class="btn btn-ghost btn-sm" onclick="removeAboutLink(${i})">刪除</button>
+          </div>
+        `).join('')}
+        <div style="display:flex;gap:8px;margin-top:8px;">
+          <button class="btn btn-ghost btn-sm" onclick="addAboutLink()">＋ 新增按鈕</button>
+          ${links.length ? `<button class="btn btn-primary btn-sm" onclick="saveAboutLinks()">儲存按鈕</button>` : ''}
+        </div>
+      </div>
+    </div>
+    </div>`;
+}
+function handleAboutImageUpload(e){
+  const file = e.target.files[0];
+  if(!file) return;
+  if(file.size > 500*1024){ showToast('圖片請小於 500KB'); return; }
+  const reader = new FileReader();
+  reader.onload = ()=>{ pendingAboutImage = reader.result; render(); };
+  reader.readAsDataURL(file);
+}
+async function saveAboutContent(){
+  const about_text = document.getElementById('aboutText').value.trim();
+  const payload = { about_text };
+  if(pendingAboutImage !== undefined) payload.about_image = pendingAboutImage;
+  const { error } = await db.from('store_settings').update(payload).eq('id', 1);
+  if(error){ showToast('儲存失敗'); console.error(error); return; }
+  data.store.about_text = about_text;
+  if(pendingAboutImage !== undefined) data.store.about_image = pendingAboutImage;
+  pendingAboutImage = undefined;
+  render();
+  showToast('已儲存關於我們的內容');
+}
+function addAboutLink(){
+  const links = Array.isArray(data.store.about_links) ? [...data.store.about_links] : [];
+  links.push({ label:'', url:'' });
+  data.store.about_links = links;
+  render();
+}
+function removeAboutLink(idx){
+  const links = [...(data.store.about_links||[])];
+  links.splice(idx, 1);
+  data.store.about_links = links;
+  render();
+}
+async function saveAboutLinks(){
+  const links = Array.isArray(data.store.about_links) ? data.store.about_links : [];
+  const result = links.map((_, i)=>({
+    label: document.getElementById(`aboutLinkLabel${i}`).value.trim(),
+    url: document.getElementById(`aboutLinkUrl${i}`).value.trim()
+  })).filter(l => l.label && l.url);
+  const { error } = await db.from('store_settings').update({ about_links: result }).eq('id', 1);
+  if(error){ showToast('儲存失敗'); console.error(error); return; }
+  data.store.about_links = result;
+  render();
+  showToast('已儲存連結按鈕');
+}
+
 async function saveStore(){
   const name = document.getElementById('stName').value.trim();
   if(!name){ showToast('店家名稱不能空白'); return; }
@@ -4257,7 +4351,7 @@ function pageRegistrants(){
     </div>`;
 }
 
-const PAGES = {overview:pageOverview, announcement:pageAnnouncement, cashflow:pageCashflow, classes:pageClasses, teachers:pageTeachers, members:pageMembers, roster:pageRoster, teacherlog:pageTeacherLog, popularity:pagePopularity, registration:pageRegistration, registrants:pageRegistrants};
+const PAGES = {overview:pageOverview, announcement:pageAnnouncement, about:pageAbout, cashflow:pageCashflow, classes:pageClasses, teachers:pageTeachers, members:pageMembers, roster:pageRoster, teacherlog:pageTeacherLog, popularity:pagePopularity, registration:pageRegistration, registrants:pageRegistrants};
 
 function render(){
   document.getElementById('sidebarBrand').innerHTML = data.store.name + '<span>後台管理系統</span>';
@@ -4297,6 +4391,7 @@ async function navigateToPage(page){
   selectedMemberId = null; memberBookings = [];
   editingClassId = null;
   if(page==='announcement'){ pendingAnnouncementImage = undefined; }
+  if(page==='about'){ pendingAboutImage = undefined; }
   if(page==='classes'){ await loadDayOverrides(); }
   if(page==='members'){ await loadMemberStats(); await loadDayOverrides(); }
   if(page==='roster'){ await loadDayOverrides(); await Promise.all([loadRoster(), loadRosterMonthCounts()]); }
