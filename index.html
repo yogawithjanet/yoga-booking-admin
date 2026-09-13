@@ -1609,7 +1609,6 @@ function pageAbout(){
                 <div style="display:flex;gap:8px;">
                   <button class="btn btn-primary btn-sm" onclick="saveOneAboutLink(${i})">儲存</button>
                   <button class="btn btn-ghost btn-sm" onclick="editingAboutLinkIdx=-1;render()">取消</button>
-                  <button class="btn btn-ghost btn-sm" style="margin-left:auto;color:var(--danger);" onclick="removeAboutLink(${i})">刪除</button>
                 </div>
               </div>
             ` : `
@@ -1619,6 +1618,7 @@ function pageAbout(){
                   <div style="font-size:12px;color:var(--muted);word-break:break-all;">${link.url}</div>
                 </div>
                 <button class="btn btn-ghost btn-sm" onclick="editingAboutLinkIdx=${i};render()">編輯</button>
+                <button class="btn btn-ghost btn-sm" style="color:var(--danger);" onclick="removeAboutLink(${i})">刪除</button>
               </div>
             `}
           </div>
