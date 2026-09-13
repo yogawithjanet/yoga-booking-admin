@@ -1578,11 +1578,17 @@ function pageAbout(){
         <div class="form-grid">
           <div class="field" style="grid-column:1/-1;">
             <label>照片</label>
-            ${previewImage ? `<div style="margin-bottom:8px;"><img src="${previewImage}" style="max-width:100%;max-height:200px;border-radius:10px;"></div>` : ''}
-            <div style="display:flex;gap:8px;">
+            ${previewImage ? `
+              <div style="margin-bottom:8px;"><img src="${previewImage}" style="max-width:100%;max-height:200px;border-radius:10px;"></div>
+              <div style="display:flex;gap:8px;align-items:center;">
+                <span style="font-size:12px;color:var(--sage-dark);font-weight:600;">照片已上傳</span>
+                <button class="btn btn-ghost btn-sm" onclick="document.getElementById('aboutImageInput').click()">更換照片</button>
+                <button class="btn btn-ghost btn-sm" onclick="pendingAboutImage='';aboutDirty=true;render()">移除照片</button>
+                <input id="aboutImageInput" type="file" accept="image/*" onchange="handleAboutImageUpload(event)" style="display:none;">
+              </div>
+            ` : `
               <input type="file" accept="image/*" onchange="handleAboutImageUpload(event)" style="font-size:12px;">
-              ${previewImage ? `<button class="btn btn-ghost btn-sm" onclick="pendingAboutImage='';aboutDirty=true;render()">移除照片</button>` : ''}
-            </div>
+            `}
           </div>
           <div class="field" style="grid-column:1/-1;"><label>介紹文字</label><textarea id="aboutText" style="min-height:120px;" placeholder="介紹你的教室、理念、課程特色..." oninput="aboutDirty=true">${s.about_text||''}</textarea></div>
         </div>
