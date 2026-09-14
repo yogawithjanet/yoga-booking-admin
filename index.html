@@ -1385,14 +1385,30 @@ async function removeOverride(id){
 }
 
 /* ================= 老師管理 ================= */
+let editingTeacherId = null;
 function pageTeachers(){
-  const rows = data.teachers.map(t=>`
-    <tr>
+  const rows = data.teachers.map(t=>{
+    if(editingTeacherId === t.id){
+      return `<tr>
+        <td><input id="etName" value="${t.name}" style="width:100%;border:1px solid var(--line);border-radius:8px;padding:6px 10px;font-size:13px;"></td>
+        <td><input id="etSpecialty" value="${t.specialty||''}" style="width:100%;border:1px solid var(--line);border-radius:8px;padding:6px 10px;font-size:13px;"></td>
+        <td><input id="etPhone" value="${t.phone||''}" style="width:100%;border:1px solid var(--line);border-radius:8px;padding:6px 10px;font-size:13px;"></td>
+        <td><div class="row-actions">
+          <button class="btn btn-primary btn-sm" onclick="saveTeacher('${t.id}')">儲存</button>
+          <button class="btn btn-ghost btn-sm" onclick="editingTeacherId=null;render()">取消</button>
+        </div></td>
+      </tr>`;
+    }
+    return `<tr>
       <td><span class="avatar-sm">${t.name[0]}</span>${t.name}</td>
       <td>${t.specialty||'—'}</td>
       <td>${t.phone||'—'}</td>
-      <td><div class="row-actions"><button class="btn btn-danger btn-sm" onclick="removeTeacher('${t.id}')">移除</button></div></td>
-    </tr>`).join('');
+      <td><div class="row-actions">
+        <button class="btn btn-ghost btn-sm" onclick="editingTeacherId='${t.id}';render()">編輯</button>
+        <button class="btn btn-danger btn-sm" onclick="removeTeacher('${t.id}')">移除</button>
+      </div></td>
+    </tr>`;
+  }).join('');
   return `
     <div class="page-title">老師管理</div>
     <div class="page-sub">老師資料會顯示在學生端課程卡片上（例如「👤 Amy 老師」）。</div>
@@ -1426,6 +1442,16 @@ async function addTeacher(){
   await loadAdminState();
   showToast('已新增老師');
   render();
+}
+async function saveTeacher(id){
+  const name = document.getElementById('etName').value.trim();
+  const specialty = document.getElementById('etSpecialty').value.trim();
+  const phone = document.getElementById('etPhone').value.trim();
+  if(!name){ showToast('姓名不能空白'); return; }
+  const { error } = await db.from('teachers').update({ name, specialty: specialty||'—', phone: phone||'—' }).eq('id', id);
+  if(error){ showToast('儲存失敗'); console.error(error); return; }
+  editingTeacherId = null;
+  await loadAdminState(); render(); showToast('已更新老師資料');
 }
 async function removeTeacher(id){
   const { error } = await db.from('teachers').delete().eq('id', id);
