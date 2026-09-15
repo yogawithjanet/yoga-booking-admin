@@ -610,7 +610,28 @@ async function loadAdminState(){
   if(notifyRes.data) data.notify = notifyRes.data;
   if(membersRes.data) data.members = membersRes.data;
   if(regQRes.data) registrationQuestions = regQRes.data;
-  await loadDayOverrides(); // 一併載入單日停課/加開特別課，讓學員管理等頁面也能用到
+  await loadDayOverrides();
+  await syncRemainingCredits();
+}
+
+async function syncRemainingCredits(){
+  if(!data.members.length) return;
+  const { data: allBatches } = await db.from('credit_batches').select('line_user_id, remaining, expires_at');
+  if(!allBatches) return;
+  const todayStr = new Date().toISOString().slice(0,10);
+  const batchMap = {};
+  allBatches.forEach(b=>{
+    if(b.remaining <= 0) return;
+    if(b.expires_at && b.expires_at < todayStr) return;
+    batchMap[b.line_user_id] = (batchMap[b.line_user_id]||0) + b.remaining;
+  });
+  for(const m of data.members){
+    const correct = batchMap[m.line_user_id] || 0;
+    if(m.remaining_credits !== correct){
+      await db.from('members').update({ remaining_credits: correct }).eq('line_user_id', m.line_user_id);
+      m.remaining_credits = correct;
+    }
+  }
 }
 
 function memberName(lineUserId){
