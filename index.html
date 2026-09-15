@@ -616,20 +616,43 @@ async function loadAdminState(){
 
 async function syncRemainingCredits(){
   if(!data.members.length) return;
-  const { data: allBatches } = await db.from('credit_batches').select('line_user_id, remaining, expires_at');
+  const { data: allBatches } = await db.from('credit_batches').select('id, line_user_id, amount, remaining, expires_at, created_at');
   if(!allBatches) return;
+  const { data: allActiveBookings } = await db.from('bookings').select('id, line_user_id, credit_batch_id').eq('status','active');
+  if(!allActiveBookings) return;
   const todayStr = new Date().toISOString().slice(0,10);
-  const batchMap = {};
+  const memberBatchMap = {};
   allBatches.forEach(b=>{
-    if(b.remaining <= 0) return;
-    if(b.expires_at && b.expires_at < todayStr) return;
-    batchMap[b.line_user_id] = (batchMap[b.line_user_id]||0) + b.remaining;
+    if(b.amount<=0) return;
+    if(!memberBatchMap[b.line_user_id]) memberBatchMap[b.line_user_id] = [];
+    memberBatchMap[b.line_user_id].push(b);
   });
-  for(const m of data.members){
-    const correct = batchMap[m.line_user_id] || 0;
-    if(m.remaining_credits !== correct){
-      await db.from('members').update({ remaining_credits: correct }).eq('line_user_id', m.line_user_id);
-      m.remaining_credits = correct;
+  for(const uid of Object.keys(memberBatchMap)){
+    const batches = memberBatchMap[uid].sort((a,b)=>new Date(a.created_at)-new Date(b.created_at));
+    const bookings = allActiveBookings.filter(bk=>bk.line_user_id===uid);
+    const batchIds = new Set(batches.map(b=>b.id));
+    const assigned = {};
+    batches.forEach(b=>{ assigned[b.id]=0; });
+    bookings.filter(bk=>bk.credit_batch_id && batchIds.has(bk.credit_batch_id))
+      .forEach(bk=>{ assigned[bk.credit_batch_id]++; });
+    const orphans = bookings.filter(bk=>!bk.credit_batch_id || !batchIds.has(bk.credit_batch_id));
+    for(const o of orphans){
+      const target = batches.find(b=> b.amount - assigned[b.id] > 0);
+      if(target) assigned[target.id]++;
+    }
+    let totalRemaining = 0;
+    for(const b of batches){
+      const correctRemaining = Math.max(0, b.amount - assigned[b.id]);
+      if(b.remaining !== correctRemaining){
+        await db.from('credit_batches').update({ remaining: correctRemaining }).eq('id', b.id);
+        b.remaining = correctRemaining;
+      }
+      if(!b.expires_at || b.expires_at >= todayStr) totalRemaining += correctRemaining;
+    }
+    const m = data.members.find(x=>x.line_user_id===uid);
+    if(m && m.remaining_credits !== totalRemaining){
+      await db.from('members').update({ remaining_credits: totalRemaining }).eq('line_user_id', uid);
+      m.remaining_credits = totalRemaining;
     }
   }
 }
