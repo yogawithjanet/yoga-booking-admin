@@ -618,9 +618,10 @@ async function syncRemainingCredits(){
   if(!data.members.length) return;
   const { data: allBatches } = await db.from('credit_batches').select('id, line_user_id, amount, remaining, expires_at, created_at');
   if(!allBatches) return;
-  const { data: allActiveBookings } = await db.from('bookings').select('id, line_user_id, credit_batch_id').eq('status','active');
-  if(!allActiveBookings) return;
-  const todayStr = new Date().toISOString().slice(0,10);
+  const { data: allUsedBookings } = await db.from('bookings').select('id, line_user_id, credit_batch_id').in('status',['active','completed']);
+  if(!allUsedBookings) return;
+  const _n = new Date();
+  const todayStr = `${_n.getFullYear()}-${String(_n.getMonth()+1).padStart(2,'0')}-${String(_n.getDate()).padStart(2,'0')}`;
   const memberBatchMap = {};
   allBatches.forEach(b=>{
     if(b.amount<=0) return;
@@ -629,7 +630,7 @@ async function syncRemainingCredits(){
   });
   for(const uid of Object.keys(memberBatchMap)){
     const batches = memberBatchMap[uid].sort((a,b)=>new Date(a.created_at)-new Date(b.created_at));
-    const bookings = allActiveBookings.filter(bk=>bk.line_user_id===uid);
+    const bookings = allUsedBookings.filter(bk=>bk.line_user_id===uid);
     const batchIds = new Set(batches.map(b=>b.id));
     const assigned = {};
     batches.forEach(b=>{ assigned[b.id]=0; });
@@ -953,11 +954,30 @@ function changeClassesCalendarMonth(delta){
 async function quickCancelOccurrence(iso, templateId){
   const already = dayOverrides.some(o=>o.type==='cancel' && o.date===iso && o.class_template_id===templateId);
   if(already){ showToast('這天已經停開了'); return; }
+  const dateKey = isoToDateKey(iso);
+  const classKey = `${dateKey}_${templateId}`;
+  const { data: activeBookings } = await db.from('bookings').select('id, line_user_id, credit_batch_id')
+    .eq('class_key', classKey).eq('status','active');
+  const count = activeBookings ? activeBookings.length : 0;
+  const _n = new Date();
+  const todayIso = `${_n.getFullYear()}-${String(_n.getMonth()+1).padStart(2,'0')}-${String(_n.getDate()).padStart(2,'0')}`;
+  const isFuture = iso >= todayIso;
+  if(count > 0 && isFuture){
+    if(!confirm(`停開 ${iso} 這天的課？\n\n有 ${count} 筆預約會自動取消並退還堂數。`)) return;
+    for(const b of activeBookings){
+      await db.from('bookings').update({ status:'cancelled' }).eq('id', b.id);
+      if(b.credit_batch_id){
+        const { data: batch } = await db.from('credit_batches').select('remaining').eq('id', b.credit_batch_id).single();
+        if(batch) await db.from('credit_batches').update({ remaining: batch.remaining + 1 }).eq('id', b.credit_batch_id);
+      }
+    }
+  }
   const { error } = await db.from('class_overrides').insert({ type:'cancel', date:iso, class_template_id:templateId });
   if(error){ showToast('操作失敗'); console.error(error); return; }
   await loadDayOverrides();
+  if(count > 0 && isFuture) await loadAdminState();
   render();
-  showToast('已停開這一天的課');
+  showToast(count > 0 && isFuture ? `已停開，${count} 筆預約已取消並退還堂數` : '已停開這一天的課');
 }
 /* ---- 統一的「新增課程」表單模式 ---- */
 let classFormMode = 'recurring'; // 'recurring'（每週固定）| 'single'（只有這一天）
@@ -1395,9 +1415,36 @@ async function saveClassForm(){
   }
 }
 async function removeClass(id){
+  const tmpl = data.classes.find(c=>c.id===id);
+  const tmplName = tmpl ? tmpl.title : '此課程';
+  const _n = new Date();
+  const todayIso = `${_n.getFullYear()}-${String(_n.getMonth()+1).padStart(2,'0')}-${String(_n.getDate()).padStart(2,'0')}`;
+  const { data: futureBookings } = await db.from('bookings').select('id, line_user_id, credit_batch_id, class_date_iso')
+    .eq('class_template_id', id).eq('status','active').gte('class_date_iso', todayIso);
+  const futureCount = futureBookings ? futureBookings.length : 0;
+  const msg = futureCount > 0
+    ? `確定要刪除「${tmplName}」嗎？\n\n有 ${futureCount} 筆未來的預約會自動取消並退還堂數。`
+    : `確定要刪除「${tmplName}」嗎？`;
+  if(!confirm(msg)) return;
+  const { data: pastBookings } = await db.from('bookings').select('id')
+    .eq('class_template_id', id).eq('status','active').lt('class_date_iso', todayIso);
+  if(pastBookings && pastBookings.length > 0){
+    const pastIds = pastBookings.map(b=>b.id);
+    await db.from('bookings').update({ status:'completed' }).in('id', pastIds);
+  }
+  if(futureBookings && futureBookings.length > 0){
+    for(const b of futureBookings){
+      await db.from('bookings').update({ status:'cancelled' }).eq('id', b.id);
+      if(b.credit_batch_id){
+        const { data: batch } = await db.from('credit_batches').select('remaining').eq('id', b.credit_batch_id).single();
+        if(batch) await db.from('credit_batches').update({ remaining: batch.remaining + 1 }).eq('id', b.credit_batch_id);
+      }
+    }
+  }
   const { error } = await db.from('class_templates').delete().eq('id', id);
   if(error){ showToast('刪除失敗'); console.error(error); return; }
-  await loadAdminState(); render(); showToast('已刪除');
+  await loadAdminState(); render();
+  showToast(futureCount > 0 ? `已刪除「${tmplName}」，${futureCount} 筆預約已取消並退還堂數` : '已刪除');
 }
 
 /* ---- 單日停課 / 加開特別課 ---- */
@@ -1421,9 +1468,33 @@ async function addExtraOverride(){
   showToast(`已儲存 ${dayOverrideDate} 的課程`);
 }
 async function removeOverride(id){
+  const o = dayOverrides.find(x=>x.id===id);
+  if(o && o.type==='extra'){
+    const _n = new Date();
+    const todayIso = `${_n.getFullYear()}-${String(_n.getMonth()+1).padStart(2,'0')}-${String(_n.getDate()).padStart(2,'0')}`;
+    const dateKey = isoToDateKey(o.date);
+    const classKey = `${dateKey}_extra_${o.id}`;
+    const isFuture = o.date >= todayIso;
+    const { data: activeBookings } = await db.from('bookings').select('id, line_user_id, credit_batch_id')
+      .eq('class_key', classKey).eq('status','active');
+    const count = activeBookings ? activeBookings.length : 0;
+    if(isFuture && count > 0){
+      if(!confirm(`刪除「${o.title}」（${o.date}）？\n\n有 ${count} 筆預約會自動取消並退還堂數。`)) return;
+      for(const b of activeBookings){
+        await db.from('bookings').update({ status:'cancelled' }).eq('id', b.id);
+        if(b.credit_batch_id){
+          const { data: batch } = await db.from('credit_batches').select('remaining').eq('id', b.credit_batch_id).single();
+          if(batch) await db.from('credit_batches').update({ remaining: batch.remaining + 1 }).eq('id', b.credit_batch_id);
+        }
+      }
+    } else if(!isFuture && count > 0){
+      await db.from('bookings').update({ status:'completed' }).in('id', activeBookings.map(b=>b.id));
+    }
+  }
   const { error } = await db.from('class_overrides').delete().eq('id', id);
   if(error){ showToast('刪除失敗'); console.error(error); return; }
   await loadDayOverrides();
+  await loadAdminState();
   render();
   showToast('已移除');
 }
@@ -3120,8 +3191,14 @@ function buildRosterCalendarHTML(){
 }
 
 function pageRoster(){
+  const dateKey = isoToDateKey(rosterDate);
+  const { recurring, extras } = getDayOccurrences(rosterDate);
+  const validKeys = new Set([
+    ...recurring.map(c=>`${dateKey}_${c.id}`),
+    ...extras.map(o=>`${dateKey}_extra_${o.id}`)
+  ]);
   const grouped = {};
-  rosterData.forEach(b=>{
+  rosterData.filter(b=>validKeys.has(b.class_key)).forEach(b=>{
     const key = b.class_key;
     if(!grouped[key]){
       const tmpl = b.class_template_id ? data.classes.find(c=>c.id===b.class_template_id) : null;
