@@ -542,6 +542,7 @@ let memberSearchQuery = '';
 let memberSortBy = 'tag_asc'; // 預設用標籤分類排序，方便同標籤的學員排在一起
 let memberTotalPurchased = {};  // line_user_id -> 累積購買堂數
 let memberTotalBooked = {};     // line_user_id -> 累積預約堂數
+let memberTotalExpired = {};    // line_user_id -> 累積已過期堂數
 /* ---- 標籤配色：可以手動選 10 種顏色其中一種，沒選過的話先用自動配色顯示 ---- */
 const TAG_COLORS = [
   { bg:'#eaf0e6', text:'#3f5a3c' }, // 鼠尾草綠
@@ -582,12 +583,19 @@ function todayISO(offsetDays=0){
 }
 async function loadMemberAggregates(){
   const [batchRes, bookingRes] = await Promise.all([
-    db.from('credit_batches').select('line_user_id, amount'),
+    db.from('credit_batches').select('line_user_id, amount, remaining, expires_at'),
     db.from('bookings').select('line_user_id').in('status', ['active','completed'])
   ]);
   memberTotalPurchased = {};
+  memberTotalExpired = {};
+  const today = todayISO(0);
   if(batchRes.data){
-    batchRes.data.forEach(b=>{ if(b.amount>0) memberTotalPurchased[b.line_user_id] = (memberTotalPurchased[b.line_user_id]||0) + b.amount; });
+    batchRes.data.forEach(b=>{
+      if(b.amount>0) memberTotalPurchased[b.line_user_id] = (memberTotalPurchased[b.line_user_id]||0) + b.amount;
+      if(b.expires_at && b.expires_at < today && b.remaining > 0){
+        memberTotalExpired[b.line_user_id] = (memberTotalExpired[b.line_user_id]||0) + b.remaining;
+      }
+    });
   }
   memberTotalBooked = {};
   if(bookingRes.data){
@@ -2066,6 +2074,8 @@ function pageMembers(){
   else if(memberSortBy==='purchased_desc') list = [...list].sort((a,b)=>(memberTotalPurchased[b.line_user_id]||0)-(memberTotalPurchased[a.line_user_id]||0));
   else if(memberSortBy==='booked_asc') list = [...list].sort((a,b)=>(memberTotalBooked[a.line_user_id]||0)-(memberTotalBooked[b.line_user_id]||0));
   else if(memberSortBy==='booked_desc') list = [...list].sort((a,b)=>(memberTotalBooked[b.line_user_id]||0)-(memberTotalBooked[a.line_user_id]||0));
+  else if(memberSortBy==='expired_asc') list = [...list].sort((a,b)=>(memberTotalExpired[a.line_user_id]||0)-(memberTotalExpired[b.line_user_id]||0));
+  else if(memberSortBy==='expired_desc') list = [...list].sort((a,b)=>(memberTotalExpired[b.line_user_id]||0)-(memberTotalExpired[a.line_user_id]||0));
   else if(memberSortBy==='tag_asc') list = [...list].sort((a,b)=>{
     const ta = (a.tags&&a.tags[0])||''; const tb = (b.tags&&b.tags[0])||'';
     if(!ta && tb) return 1; if(ta && !tb) return -1; return ta.localeCompare(tb);
@@ -2083,6 +2093,7 @@ function pageMembers(){
       : `<span class="avatar-sm">${(m.display_name||'?')[0]}</span>`;
     const totalPurchased = memberTotalPurchased[m.line_user_id] || 0;
     const totalBooked = memberTotalBooked[m.line_user_id] || 0;
+    const totalExpired = memberTotalExpired[m.line_user_id] || 0;
     const isTagExpanded = expandedTagMemberId === m.line_user_id;
     const tags = Array.isArray(m.tags) ? m.tags : [];
     const tagChips = tags.map(t=>`<span class="tag on" style="margin:1px 3px 1px 0;display:inline-block;${tagColorStyle(t)}">${t}</span>`).join('') || '<span style="color:var(--muted);font-size:12px;">＋ 新增標籤</span>';
@@ -2106,6 +2117,7 @@ function pageMembers(){
       <td>${totalPurchased} 堂</td>
       <td>${totalBooked} 堂</td>
       <td><b>${m.remaining_credits}</b> 堂</td>
+      <td>${totalExpired ? `<span style="color:var(--danger);">${totalExpired}</span>` : '0'} 堂</td>
       <td>
         <div class="row-actions" style="flex-wrap:wrap;justify-content:flex-end;">
           <button class="btn btn-ghost btn-sm" onclick="runCreditAction(()=>openMemberDetail('${m.line_user_id}'))">詳細資訊</button>
@@ -2200,9 +2212,10 @@ function pageMembers(){
           <th style="cursor:pointer;user-select:none;" onclick="sortColumn('purchased')">累積購買堂數 ${sortArrow('purchased')}</th>
           <th style="cursor:pointer;user-select:none;" onclick="sortColumn('booked')">累積預約堂數 ${sortArrow('booked')}</th>
           <th style="cursor:pointer;user-select:none;" onclick="sortColumn('credits')">剩餘堂數 ${sortArrow('credits')}</th>
+          <th style="cursor:pointer;user-select:none;" onclick="sortColumn('expired')">累積已過期堂數 ${sortArrow('expired')}</th>
           <th></th>
         </tr></thead>
-        <tbody>${rows || '<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:20px;">找不到符合的學員</td></tr>'}</tbody></table>
+        <tbody>${rows || '<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:20px;">找不到符合的學員</td></tr>'}</tbody></table>
       </div>
       <div class="panel-body"><div class="desc">已選擇 <b>${selectedMemberIds.size}</b> 位學員（上面「批次加堂數」「批次選課」都會套用到這些人）</div></div>
     </div>`;
