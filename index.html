@@ -127,7 +127,8 @@
   .add-bar{display:flex;justify-content:flex-end;padding:12px 18px;border-top:1px solid var(--line);background:var(--paper);}
 
   /* ---- 學員管理頁：三欄快速操作卡片 ---- */
-  .action-row{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;align-items:stretch;margin-bottom:18px;}
+  .action-row{display:flex;flex-direction:column;gap:20px;}
+  .members-layout{display:grid;grid-template-columns:320px 1fr;gap:20px;align-items:start;margin-bottom:18px;}
   .action-card{background:var(--card);border:1px solid var(--line);border-radius:22px;padding:26px;display:flex;flex-direction:column;}
   .action-card h3{font-size:16px;font-weight:700;margin:0 0 18px;padding-bottom:18px;border-bottom:1px solid var(--line);}
   .action-card .desc{font-size:12.5px;color:var(--muted);margin-bottom:16px;line-height:1.6;}
@@ -371,7 +372,7 @@
     .two-col-row{grid-template-columns:1fr;gap:14px;}
     .roster-layout{grid-template-columns:1fr;gap:14px;}
     .classes-calendar-row{grid-template-columns:1fr;gap:14px;}
-    .action-row{grid-template-columns:1fr;}
+    .members-layout{grid-template-columns:1fr;}
     .stat-cards{grid-template-columns:repeat(2,1fr);}
 
     .panel-body.pad0{overflow-x:auto;-webkit-overflow-scrolling:touch;}
@@ -2159,90 +2160,92 @@ function pageMembers(){
     <div class="page-title">學員管理</div>
     <div class="page-sub">學員會在<b>第一次透過 LINE 打開預約頁面後</b>自動出現在這份名單裡，你不需要手動新增。點「詳細資訊」可以看到選課歷史、堂數批次明細。在下方列表打勾可以選取多位學員，套用到「批次加堂數」「批次選課」。</div>
 
-    <div class="action-row">
-      <div class="action-card">
-        <h3>標籤管理</h3>
-        <div class="desc">先建立標籤（例如：期班A、體驗、週四晚班），加標籤、篩選學員時就能直接用下拉選單選。點標籤可以修改名稱和顏色。</div>
-        <div class="tag-add-row">
-          <input type="text" id="newAvailableTagInput" placeholder="輸入新標籤" onkeydown="if(event.key==='Enter') addAvailableTag()">
-          <button class="tag-add-btn" onclick="addAvailableTag()">＋</button>
+    <div class="members-layout">
+      <div class="action-row">
+        <div class="action-card">
+          <h3>批次加堂數</h3>
+          <div class="desc">套用到已選擇的 <b>${selectedMemberIds.size}</b> 位學員。</div>
+          <div class="action-field"><label>堂數</label><input id="bcAmount" type="number" value="10" min="1"></div>
+          <div class="action-field"><label>效期方式</label>
+            <select id="bcExpiryType" onchange="onBatchCreditExpiryTypeChange(this.value)">
+              <option value="none">不設效期（永久有效）</option>
+              <option value="date">指定到期日</option>
+              <option value="days">幾天後到期</option>
+            </select>
+          </div>
+          <div class="action-field" id="bcDateField" style="display:none;"><label>到期日</label><input id="bcExpiryDate" type="date"></div>
+          <div class="action-field" id="bcDaysField" style="display:none;"><label>幾天後到期</label><input id="bcExpiryDays" type="number" value="30" min="1"></div>
+          <div class="action-field"><label>實收金額（選填，NT$／每人）</label><input id="bcAmountPaid" type="number" min="0" placeholder="每人都收這個金額的話可以填"></div>
+          <button class="action-btn-full primary" onclick="runCreditAction(submitBatchCredits)">＋ 新增這批堂數</button>
         </div>
-        <div class="tag-manage-list">
-          ${availableTags.map(t=>{
-            const isOpen = expandedColorTag === t;
-            return `
-            <div>
-              <div style="display:flex;align-items:center;gap:8px;">
-                <span class="tag-manage-item">
-                  <span class="tag-chip" style="cursor:pointer;${tagColorStyle(t)}" onclick="toggleColorPicker('${t}')">${t}</span>
-                  <span class="tag-action-btn delete" onclick="removeAvailableTag('${t}')" title="刪除標籤">✕</span>
-                </span>
-              </div>
-              ${isOpen ? `
-              <div style="margin-top:9px;padding-left:2px;" onclick="event.stopPropagation()">
-                <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">
-                  <input type="text" id="tagRenameInput-${availableTags.indexOf(t)}" value="${t}" style="border:1px solid var(--line);border-radius:6px;padding:4px 8px;font-size:13px;width:120px;">
-                  <button class="btn btn-primary btn-sm" onclick="saveTagRename('${t}', document.getElementById('tagRenameInput-${availableTags.indexOf(t)}').value)" style="padding:4px 10px;font-size:12px;">儲存</button>
+
+        <div class="action-card">
+          <h3>批次選課</h3>
+          <div class="desc">套用到已選擇的 <b>${selectedMemberIds.size}</b> 位學員。先選課程，再勾選要預約的日期。</div>
+          <div class="action-field"><label>課程</label><select id="bbClass" onchange="onBbClassChange()">${'<option value="">請選擇課程</option>' + (getClassOptionsHtml() || '')}</select></div>
+          <div id="bbDatesContainer"></div>
+          <button class="action-btn-full primary" onclick="submitBatchBooking()">＋ 新增這些預約</button>
+        </div>
+
+        <div class="action-card">
+          <h3>標籤管理</h3>
+          <div class="desc">點標籤可以修改名稱和顏色。</div>
+          <div class="tag-add-row">
+            <input type="text" id="newAvailableTagInput" placeholder="輸入新標籤" onkeydown="if(event.key==='Enter') addAvailableTag()">
+            <button class="tag-add-btn" onclick="addAvailableTag()">＋</button>
+          </div>
+          <div class="tag-manage-list">
+            ${availableTags.map(t=>{
+              const isOpen = expandedColorTag === t;
+              return `
+              <div>
+                <div style="display:flex;align-items:center;gap:8px;">
+                  <span class="tag-manage-item">
+                    <span class="tag-chip" style="cursor:pointer;${tagColorStyle(t)}" onclick="toggleColorPicker('${t}')">${t}</span>
+                    <span class="tag-action-btn delete" onclick="removeAvailableTag('${t}')" title="刪除標籤">✕</span>
+                  </span>
                 </div>
-                <div style="display:flex;gap:7px;flex-wrap:wrap;">
-                  ${TAG_COLORS.map((c,i)=>`<span onclick="setTagColor('${t}', ${i})" title="選這個顏色" style="width:22px;height:22px;border-radius:50%;background:${c.bg};cursor:pointer;border:2px solid ${getTagColorIndex(t)===i ? c.text : 'transparent'};display:inline-block;"></span>`).join('')}
-                </div>
-              </div>` : ''}
-            </div>`;
-          }).join('') || '<span style="color:var(--muted);font-size:12px;">尚未建立任何標籤</span>'}
+                ${isOpen ? `
+                <div style="margin-top:9px;padding-left:2px;" onclick="event.stopPropagation()">
+                  <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">
+                    <input type="text" id="tagRenameInput-${availableTags.indexOf(t)}" value="${t}" style="border:1px solid var(--line);border-radius:6px;padding:4px 8px;font-size:13px;width:120px;">
+                    <button class="btn btn-primary btn-sm" onclick="saveTagRename('${t}', document.getElementById('tagRenameInput-${availableTags.indexOf(t)}').value)" style="padding:4px 10px;font-size:12px;">儲存</button>
+                  </div>
+                  <div style="display:flex;gap:7px;flex-wrap:wrap;">
+                    ${TAG_COLORS.map((c,i)=>`<span onclick="setTagColor('${t}', ${i})" title="選這個顏色" style="width:22px;height:22px;border-radius:50%;background:${c.bg};cursor:pointer;border:2px solid ${getTagColorIndex(t)===i ? c.text : 'transparent'};display:inline-block;"></span>`).join('')}
+                  </div>
+                </div>` : ''}
+              </div>`;
+            }).join('') || '<span style="color:var(--muted);font-size:12px;">尚未建立任何標籤</span>'}
+          </div>
         </div>
       </div>
 
-      <div class="action-card">
-        <h3>批次加堂數</h3>
-        <div class="desc">套用到已選擇的 <b>${selectedMemberIds.size}</b> 位學員。</div>
-        <div class="action-field"><label>堂數</label><input id="bcAmount" type="number" value="10" min="1"></div>
-        <div class="action-field"><label>效期方式</label>
-          <select id="bcExpiryType" onchange="onBatchCreditExpiryTypeChange(this.value)">
-            <option value="none">不設效期（永久有效）</option>
-            <option value="date">指定到期日</option>
-            <option value="days">幾天後到期</option>
+      <div class="panel" style="margin-bottom:0;">
+        <div class="panel-head"><h3>學員列表</h3></div>
+        <div class="panel-body" style="display:flex;flex-wrap:wrap;gap:10px;">
+          <select onchange="onMemberTagFilter(this.value)" style="border:1px solid var(--line);border-radius:8px;padding:8px 12px;font-size:13px;">
+            <option value="">全部標籤</option>
+            ${availableTags.map(t=>`<option value="${t}" ${memberTagFilter===t?'selected':''}>${t}</option>`).join('')}
           </select>
+          <input type="text" placeholder="搜尋姓名..." value="${memberSearchQuery}" oninput="onMemberSearch(this.value)" style="flex:1;min-width:160px;border:1px solid var(--line);border-radius:8px;padding:8px 12px;font-size:13px;">
+          <button class="btn btn-ghost btn-sm" onclick='toggleSelectAllFiltered(${JSON.stringify(list.map(m=>({line_user_id:m.line_user_id})))})'>全選／取消全選（目前顯示）</button>
         </div>
-        <div class="action-field" id="bcDateField" style="display:none;"><label>到期日</label><input id="bcExpiryDate" type="date"></div>
-        <div class="action-field" id="bcDaysField" style="display:none;"><label>幾天後到期</label><input id="bcExpiryDays" type="number" value="30" min="1"></div>
-        <div class="action-field"><label>實收金額（選填，NT$／每人）</label><input id="bcAmountPaid" type="number" min="0" placeholder="每人都收這個金額的話可以填"></div>
-        <button class="action-btn-full primary" onclick="runCreditAction(submitBatchCredits)">＋ 新增這批堂數</button>
+        <div class="panel-body pad0">
+          <table><thead><tr>
+            <th></th>
+            <th style="cursor:pointer;user-select:none;" onclick="sortColumn('name')">學員 ${sortArrow('name')}</th>
+            <th style="cursor:pointer;user-select:none;" onclick="sortColumn('tag')">標籤 ${sortArrow('tag')}</th>
+            <th style="cursor:pointer;user-select:none;" onclick="sortColumn('purchased')">累積購買堂數 ${sortArrow('purchased')}</th>
+            <th style="cursor:pointer;user-select:none;" onclick="sortColumn('booked')">累積預約堂數 ${sortArrow('booked')}</th>
+            <th style="cursor:pointer;user-select:none;" onclick="sortColumn('expired')">累積已過期堂數 ${sortArrow('expired')}</th>
+            <th style="cursor:pointer;user-select:none;" onclick="sortColumn('credits')">剩餘可用堂數 ${sortArrow('credits')}</th>
+            <th></th>
+          </tr></thead>
+          <tbody>${rows || '<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:20px;">找不到符合的學員</td></tr>'}</tbody></table>
+        </div>
+        <div class="panel-body"><div class="desc">已選擇 <b>${selectedMemberIds.size}</b> 位學員（左邊「批次加堂數」「批次選課」都會套用到這些人）</div></div>
       </div>
-
-      <div class="action-card">
-        <h3>批次選課</h3>
-        <div class="desc">套用到已選擇的 <b>${selectedMemberIds.size}</b> 位學員。先選課程，再勾選要預約的日期。</div>
-        <div class="action-field"><label>課程</label><select id="bbClass" onchange="onBbClassChange()">${'<option value="">請選擇課程</option>' + (getClassOptionsHtml() || '')}</select></div>
-        <div id="bbDatesContainer"></div>
-        <button class="action-btn-full primary" onclick="submitBatchBooking()">＋ 新增這些預約</button>
-      </div>
-    </div>
-
-    <div class="panel">
-      <div class="panel-head"><h3>學員列表</h3></div>
-      <div class="panel-body" style="display:flex;flex-wrap:wrap;gap:10px;">
-        <select onchange="onMemberTagFilter(this.value)" style="border:1px solid var(--line);border-radius:8px;padding:8px 12px;font-size:13px;">
-          <option value="">全部標籤</option>
-          ${availableTags.map(t=>`<option value="${t}" ${memberTagFilter===t?'selected':''}>${t}</option>`).join('')}
-        </select>
-        <input type="text" placeholder="搜尋姓名..." value="${memberSearchQuery}" oninput="onMemberSearch(this.value)" style="flex:1;min-width:160px;border:1px solid var(--line);border-radius:8px;padding:8px 12px;font-size:13px;">
-        <button class="btn btn-ghost btn-sm" onclick='toggleSelectAllFiltered(${JSON.stringify(list.map(m=>({line_user_id:m.line_user_id})))})'>全選／取消全選（目前顯示）</button>
-      </div>
-      <div class="panel-body pad0">
-        <table><thead><tr>
-          <th></th>
-          <th style="cursor:pointer;user-select:none;" onclick="sortColumn('name')">學員 ${sortArrow('name')}</th>
-          <th style="cursor:pointer;user-select:none;" onclick="sortColumn('tag')">標籤 ${sortArrow('tag')}</th>
-          <th style="cursor:pointer;user-select:none;" onclick="sortColumn('purchased')">累積購買堂數 ${sortArrow('purchased')}</th>
-          <th style="cursor:pointer;user-select:none;" onclick="sortColumn('booked')">累積預約堂數 ${sortArrow('booked')}</th>
-          <th style="cursor:pointer;user-select:none;" onclick="sortColumn('expired')">累積已過期堂數 ${sortArrow('expired')}</th>
-          <th style="cursor:pointer;user-select:none;" onclick="sortColumn('credits')">剩餘可用堂數 ${sortArrow('credits')}</th>
-          <th></th>
-        </tr></thead>
-        <tbody>${rows || '<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:20px;">找不到符合的學員</td></tr>'}</tbody></table>
-      </div>
-      <div class="panel-body"><div class="desc">已選擇 <b>${selectedMemberIds.size}</b> 位學員（上面「批次加堂數」「批次選課」都會套用到這些人）</div></div>
     </div>`;
 }
 
