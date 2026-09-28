@@ -169,7 +169,6 @@
     display:flex;align-items:center;justify-content:center;cursor:pointer;
     opacity:0;pointer-events:none;transition:opacity .15s ease;border:none;
   }
-  .tag-manage-item .tag-action-btn.rename{background:var(--sage);color:var(--sage-dark);}
   .tag-manage-item .tag-action-btn.delete{background:var(--danger);color:#fff;box-shadow:0 1px 3px rgba(0,0,0,.25);}
   .tag-manage-item:hover .tag-action-btn{opacity:1;pointer-events:auto;}
   .date-row-full{display:flex;gap:8px;margin-bottom:8px;}
@@ -1980,8 +1979,7 @@ async function removeAvailableTag(tag){
   showToast('已刪除標籤');
 }
 
-async function renameAvailableTag(oldTag){
-  const newTag = prompt('請輸入新的標籤名稱：', oldTag);
+async function saveTagRename(oldTag, newTag){
   if(!newTag || newTag.trim()==='' || newTag.trim()===oldTag) return;
   const trimmed = newTag.trim();
   const tags = data.store.available_tags || [];
@@ -2003,6 +2001,7 @@ async function renameAvailableTag(oldTag){
     m.tags = updatedTags;
     return db.from('members').update({ tags: updatedTags }).eq('line_user_id', m.line_user_id);
   }));
+  expandedColorTag = trimmed;
   render();
   showToast(`標籤已改為「${trimmed}」`);
 }
@@ -2163,7 +2162,7 @@ function pageMembers(){
     <div class="action-row">
       <div class="action-card">
         <h3>標籤管理</h3>
-        <div class="desc">先建立標籤（例如：期班A、體驗、週四晚班），加標籤、篩選學員時就能直接用下拉選單選。點標籤文字可以選顏色。</div>
+        <div class="desc">先建立標籤（例如：期班A、體驗、週四晚班），加標籤、篩選學員時就能直接用下拉選單選。點標籤可以修改名稱和顏色。</div>
         <div class="tag-add-row">
           <input type="text" id="newAvailableTagInput" placeholder="輸入新標籤" onkeydown="if(event.key==='Enter') addAvailableTag()">
           <button class="tag-add-btn" onclick="addAvailableTag()">＋</button>
@@ -2176,13 +2175,18 @@ function pageMembers(){
               <div style="display:flex;align-items:center;gap:8px;">
                 <span class="tag-manage-item">
                   <span class="tag-chip" style="cursor:pointer;${tagColorStyle(t)}" onclick="toggleColorPicker('${t}')">${t}</span>
-                  <span class="tag-action-btn rename" onclick="renameAvailableTag('${t}')" title="修改標籤名稱">✎</span>
                   <span class="tag-action-btn delete" onclick="removeAvailableTag('${t}')" title="刪除標籤">✕</span>
                 </span>
               </div>
               ${isOpen ? `
-              <div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:9px;padding-left:2px;">
-                ${TAG_COLORS.map((c,i)=>`<span onclick="setTagColor('${t}', ${i})" title="選這個顏色" style="width:22px;height:22px;border-radius:50%;background:${c.bg};cursor:pointer;border:2px solid ${getTagColorIndex(t)===i ? c.text : 'transparent'};display:inline-block;"></span>`).join('')}
+              <div style="margin-top:9px;padding-left:2px;" onclick="event.stopPropagation()">
+                <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">
+                  <input type="text" id="tagRenameInput-${availableTags.indexOf(t)}" value="${t}" style="border:1px solid var(--line);border-radius:6px;padding:4px 8px;font-size:13px;width:120px;">
+                  <button class="btn btn-primary btn-sm" onclick="saveTagRename('${t}', document.getElementById('tagRenameInput-${availableTags.indexOf(t)}').value)" style="padding:4px 10px;font-size:12px;">儲存</button>
+                </div>
+                <div style="display:flex;gap:7px;flex-wrap:wrap;">
+                  ${TAG_COLORS.map((c,i)=>`<span onclick="setTagColor('${t}', ${i})" title="選這個顏色" style="width:22px;height:22px;border-radius:50%;background:${c.bg};cursor:pointer;border:2px solid ${getTagColorIndex(t)===i ? c.text : 'transparent'};display:inline-block;"></span>`).join('')}
+                </div>
               </div>` : ''}
             </div>`;
           }).join('') || '<span style="color:var(--muted);font-size:12px;">尚未建立任何標籤</span>'}
