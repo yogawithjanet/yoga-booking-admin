@@ -540,8 +540,8 @@ let memberPaymentFilterEnd = '';   // 消費紀錄的日期篩選（結束）
 let editingBatchId = null;   // 目前正在編輯的堂數批次 id
 let memberSearchQuery = '';
 let memberSortBy = 'tag_asc'; // 預設用標籤分類排序，方便同標籤的學員排在一起
-let memberStatsCounts = {};   // line_user_id -> 指定區間內的已預約堂數
-let statsMonths = 2;
+let memberTotalPurchased = {};  // line_user_id -> 累積購買堂數
+let memberTotalBooked = {};     // line_user_id -> 累積預約堂數
 /* ---- 標籤配色：可以手動選 10 種顏色其中一種，沒選過的話先用自動配色顯示 ---- */
 const TAG_COLORS = [
   { bg:'#eaf0e6', text:'#3f5a3c' }, // 鼠尾草綠
@@ -580,18 +580,18 @@ function todayISO(offsetDays=0){
   const d = new Date(); d.setDate(d.getDate()+offsetDays);
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
-let statsRangeStart = todayISO(0);
-let statsRangeEnd = todayISO(60);
-
-async function loadMemberStats(){
-  const { data: rows, error } = await db.from('bookings')
-    .select('line_user_id')
-    .eq('status', 'active')
-    .gte('class_date_iso', statsRangeStart)
-    .lte('class_date_iso', statsRangeEnd);
-  memberStatsCounts = {};
-  if(!error && rows){
-    rows.forEach(r=>{ memberStatsCounts[r.line_user_id] = (memberStatsCounts[r.line_user_id]||0) + 1; });
+async function loadMemberAggregates(){
+  const [batchRes, bookingRes] = await Promise.all([
+    db.from('credit_batches').select('line_user_id, amount'),
+    db.from('bookings').select('line_user_id').in('status', ['active','completed'])
+  ]);
+  memberTotalPurchased = {};
+  if(batchRes.data){
+    batchRes.data.forEach(b=>{ if(b.amount>0) memberTotalPurchased[b.line_user_id] = (memberTotalPurchased[b.line_user_id]||0) + b.amount; });
+  }
+  memberTotalBooked = {};
+  if(bookingRes.data){
+    bookingRes.data.forEach(r=>{ memberTotalBooked[r.line_user_id] = (memberTotalBooked[r.line_user_id]||0) + 1; });
   }
 }
 
@@ -2062,8 +2062,10 @@ function pageMembers(){
   else if(memberSortBy==='name_desc') list = [...list].sort((a,b)=>(b.display_name||'').localeCompare(a.display_name||''));
   else if(memberSortBy==='credits_asc') list = [...list].sort((a,b)=>a.remaining_credits-b.remaining_credits);
   else if(memberSortBy==='credits_desc') list = [...list].sort((a,b)=>b.remaining_credits-a.remaining_credits);
-  else if(memberSortBy==='recent_asc') list = [...list].sort((a,b)=>(memberStatsCounts[a.line_user_id]||0)-(memberStatsCounts[b.line_user_id]||0));
-  else if(memberSortBy==='recent_desc') list = [...list].sort((a,b)=>(memberStatsCounts[b.line_user_id]||0)-(memberStatsCounts[a.line_user_id]||0));
+  else if(memberSortBy==='purchased_asc') list = [...list].sort((a,b)=>(memberTotalPurchased[a.line_user_id]||0)-(memberTotalPurchased[b.line_user_id]||0));
+  else if(memberSortBy==='purchased_desc') list = [...list].sort((a,b)=>(memberTotalPurchased[b.line_user_id]||0)-(memberTotalPurchased[a.line_user_id]||0));
+  else if(memberSortBy==='booked_asc') list = [...list].sort((a,b)=>(memberTotalBooked[a.line_user_id]||0)-(memberTotalBooked[b.line_user_id]||0));
+  else if(memberSortBy==='booked_desc') list = [...list].sort((a,b)=>(memberTotalBooked[b.line_user_id]||0)-(memberTotalBooked[a.line_user_id]||0));
   else if(memberSortBy==='tag_asc') list = [...list].sort((a,b)=>{
     const ta = (a.tags&&a.tags[0])||''; const tb = (b.tags&&b.tags[0])||'';
     if(!ta && tb) return 1; if(ta && !tb) return -1; return ta.localeCompare(tb);
@@ -2079,7 +2081,8 @@ function pageMembers(){
     const avatar = m.picture_url
       ? `<img src="${m.picture_url}" class="avatar-sm" style="object-fit:cover;">`
       : `<span class="avatar-sm">${(m.display_name||'?')[0]}</span>`;
-    const recentCount = memberStatsCounts[m.line_user_id] || 0;
+    const totalPurchased = memberTotalPurchased[m.line_user_id] || 0;
+    const totalBooked = memberTotalBooked[m.line_user_id] || 0;
     const isTagExpanded = expandedTagMemberId === m.line_user_id;
     const tags = Array.isArray(m.tags) ? m.tags : [];
     const tagChips = tags.map(t=>`<span class="tag on" style="margin:1px 3px 1px 0;display:inline-block;${tagColorStyle(t)}">${t}</span>`).join('') || '<span style="color:var(--muted);font-size:12px;">＋ 新增標籤</span>';
@@ -2100,8 +2103,9 @@ function pageMembers(){
       <td><input type="checkbox" ${isChecked?'checked':''} onchange="toggleMemberSelect('${m.line_user_id}', this.checked)" style="width:16px;height:16px;"></td>
       <td>${avatar}${m.display_name||'（尚未取得姓名）'}</td>
       <td style="cursor:pointer;" onclick="${isTagExpanded ? '' : `toggleTagEditor('${m.line_user_id}')`}" title="點一下編輯標籤">${tagCellContent}</td>
+      <td>${totalPurchased} 堂</td>
+      <td>${totalBooked} 堂</td>
       <td><b>${m.remaining_credits}</b> 堂</td>
-      <td>${recentCount} 堂</td>
       <td>
         <div class="row-actions" style="flex-wrap:wrap;justify-content:flex-end;">
           <button class="btn btn-ghost btn-sm" onclick="runCreditAction(()=>openMemberDetail('${m.line_user_id}'))">詳細資訊</button>
@@ -2188,26 +2192,17 @@ function pageMembers(){
         <input type="text" placeholder="搜尋姓名..." value="${memberSearchQuery}" oninput="onMemberSearch(this.value)" style="flex:1;min-width:160px;border:1px solid var(--line);border-radius:8px;padding:8px 12px;font-size:13px;">
         <button class="btn btn-ghost btn-sm" onclick='toggleSelectAllFiltered(${JSON.stringify(list.map(m=>({line_user_id:m.line_user_id})))})'>全選／取消全選（目前顯示）</button>
       </div>
-      <div class="panel-body" style="padding-top:0;padding-bottom:14px;display:flex;flex-wrap:wrap;align-items:center;gap:8px;font-size:12px;color:var(--muted);">
-        <span>「近期預約」統計區間：</span>
-        <input type="number" id="statsMonthsInput" value="${statsMonths}" style="width:46px;border:1px solid var(--line);border-radius:6px;padding:4px 6px;font-size:12px;"> 個月
-        <button class="btn btn-ghost btn-sm" onclick="applyStatsMonths()" style="padding:4px 9px;font-size:11px;">套用</button>
-        <span style="color:var(--line);">｜</span>
-        <input type="date" id="statsStart" value="${statsRangeStart}" style="border:1px solid var(--line);border-radius:6px;padding:4px 6px;font-size:12px;">
-        <span>～</span>
-        <input type="date" id="statsEnd" value="${statsRangeEnd}" style="border:1px solid var(--line);border-radius:6px;padding:4px 6px;font-size:12px;">
-        <button class="btn btn-ghost btn-sm" onclick="applyStatsRange()" style="padding:4px 9px;font-size:11px;">套用區間</button>
-      </div>
       <div class="panel-body pad0">
         <table><thead><tr>
           <th></th>
           <th style="cursor:pointer;user-select:none;" onclick="sortColumn('name')">學員 ${sortArrow('name')}</th>
           <th style="cursor:pointer;user-select:none;" onclick="sortColumn('tag')">標籤 ${sortArrow('tag')}</th>
+          <th style="cursor:pointer;user-select:none;" onclick="sortColumn('purchased')">累積購買堂數 ${sortArrow('purchased')}</th>
+          <th style="cursor:pointer;user-select:none;" onclick="sortColumn('booked')">累積預約堂數 ${sortArrow('booked')}</th>
           <th style="cursor:pointer;user-select:none;" onclick="sortColumn('credits')">剩餘堂數 ${sortArrow('credits')}</th>
-          <th style="cursor:pointer;user-select:none;" onclick="sortColumn('recent')">近期預約 ${sortArrow('recent')}</th>
           <th></th>
         </tr></thead>
-        <tbody>${rows || '<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:20px;">找不到符合的學員</td></tr>'}</tbody></table>
+        <tbody>${rows || '<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:20px;">找不到符合的學員</td></tr>'}</tbody></table>
       </div>
       <div class="panel-body"><div class="desc">已選擇 <b>${selectedMemberIds.size}</b> 位學員（上面「批次加堂數」「批次選課」都會套用到這些人）</div></div>
     </div>`;
@@ -2242,25 +2237,6 @@ async function clearMemberRegistration(lineUserId){
 
 function onMemberSearch(val){ memberSearchQuery = val; render(); }
 
-async function applyStatsMonths(){
-  const months = Number(document.getElementById('statsMonthsInput').value) || 1;
-  statsMonths = months;
-  statsRangeStart = todayISO(0);
-  statsRangeEnd = todayISO(months*30);
-  await loadMemberStats();
-  render();
-  showToast(`已套用未來 ${months} 個月的統計`);
-}
-async function applyStatsRange(){
-  const start = document.getElementById('statsStart').value;
-  const end = document.getElementById('statsEnd').value;
-  if(!start || !end){ showToast('請選擇開始與結束日期'); return; }
-  if(end < start){ showToast('結束日期不能早於開始日期'); return; }
-  statsRangeStart = start; statsRangeEnd = end;
-  await loadMemberStats();
-  render();
-  showToast('已更新統計區間');
-}
 
 /* ---- 堂數批次系統：每批各自的效期，扣款依「最快到期優先」 ---- */
 async function consumeCreditsFromBatches(lineUserId, count){
@@ -4571,7 +4547,7 @@ async function navigateToPage(page){
   if(page==='announcement'){ pendingAnnouncementImage = undefined; }
   if(page==='about'){ pendingAboutImage = undefined; aboutDirty = false; }
   if(page==='classes'){ await loadDayOverrides(); }
-  if(page==='members'){ await loadMemberStats(); await loadDayOverrides(); }
+  if(page==='members'){ await loadMemberAggregates(); await loadDayOverrides(); }
   if(page==='roster'){ await loadDayOverrides(); await Promise.all([loadRoster(), loadRosterMonthCounts()]); }
   if(page==='teacherlog'){ await loadTeacherLog(teacherLogSelected || (data.teachers[0] && data.teachers[0].name) || ''); }
   if(page==='cashflow'){ await loadCashflowData(); }
