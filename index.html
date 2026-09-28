@@ -2236,10 +2236,10 @@ function pageMembers(){
             <th style="width:30px;"></th>
             <th style="cursor:pointer;user-select:none;" onclick="sortColumn('name')">學員 ${sortArrow('name')}</th>
             <th style="cursor:pointer;user-select:none;" onclick="sortColumn('tag')">標籤 ${sortArrow('tag')}</th>
-            <th style="cursor:pointer;user-select:none;white-space:nowrap;font-size:12px;padding:6px 4px;" onclick="sortColumn('purchased')">累積購買 ${sortArrow('purchased')}</th>
-            <th style="cursor:pointer;user-select:none;white-space:nowrap;font-size:12px;padding:6px 4px;" onclick="sortColumn('booked')">累積預約 ${sortArrow('booked')}</th>
-            <th style="cursor:pointer;user-select:none;white-space:nowrap;font-size:12px;padding:6px 4px;" onclick="sortColumn('expired')">累積過期 ${sortArrow('expired')}</th>
-            <th style="cursor:pointer;user-select:none;white-space:nowrap;font-size:12px;padding:6px 4px;" onclick="sortColumn('credits')">剩餘可用 ${sortArrow('credits')}</th>
+            <th style="cursor:pointer;user-select:none;font-size:12px;padding:6px 4px;text-align:center;line-height:1.4;" onclick="sortColumn('purchased')">累積<br>購買 ${sortArrow('purchased')}</th>
+            <th style="cursor:pointer;user-select:none;font-size:12px;padding:6px 4px;text-align:center;line-height:1.4;" onclick="sortColumn('booked')">累積<br>預約 ${sortArrow('booked')}</th>
+            <th style="cursor:pointer;user-select:none;font-size:12px;padding:6px 4px;text-align:center;line-height:1.4;" onclick="sortColumn('expired')">累積<br>過期 ${sortArrow('expired')}</th>
+            <th style="cursor:pointer;user-select:none;font-size:12px;padding:6px 4px;text-align:center;line-height:1.4;" onclick="sortColumn('credits')">剩餘<br>可用 ${sortArrow('credits')}</th>
             <th></th>
           </tr></thead>
           <tbody>${rows || '<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:20px;">找不到符合的學員</td></tr>'}</tbody></table>
