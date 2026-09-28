@@ -2143,10 +2143,10 @@ function pageMembers(){
       <td><input type="checkbox" ${isChecked?'checked':''} onchange="toggleMemberSelect('${m.line_user_id}', this.checked)" style="width:16px;height:16px;"></td>
       <td>${avatar}${m.display_name||'（尚未取得姓名）'}</td>
       <td style="cursor:pointer;" onclick="${isTagExpanded ? '' : `toggleTagEditor('${m.line_user_id}')`}" title="點一下編輯標籤">${tagCellContent}</td>
-      <td>${totalPurchased} 堂</td>
-      <td>${totalBooked} 堂</td>
-      <td>${totalExpired ? `<span style="color:var(--danger);">${totalExpired}</span>` : '0'} 堂</td>
-      <td><b>${m.remaining_credits}</b> 堂</td>
+      <td style="white-space:nowrap;padding:6px 4px;text-align:center;">${totalPurchased}</td>
+      <td style="white-space:nowrap;padding:6px 4px;text-align:center;">${totalBooked}</td>
+      <td style="white-space:nowrap;padding:6px 4px;text-align:center;">${totalExpired ? `<span style="color:var(--danger);">${totalExpired}</span>` : '0'}</td>
+      <td style="white-space:nowrap;padding:6px 4px;text-align:center;"><b>${m.remaining_credits}</b></td>
       <td>
         <div class="row-actions" style="flex-wrap:wrap;justify-content:flex-end;">
           <button class="btn btn-ghost btn-sm" onclick="runCreditAction(()=>openMemberDetail('${m.line_user_id}'))">詳細資訊</button>
@@ -2233,13 +2233,13 @@ function pageMembers(){
         </div>
         <div class="panel-body pad0">
           <table><thead><tr>
-            <th></th>
+            <th style="width:30px;"></th>
             <th style="cursor:pointer;user-select:none;" onclick="sortColumn('name')">學員 ${sortArrow('name')}</th>
             <th style="cursor:pointer;user-select:none;" onclick="sortColumn('tag')">標籤 ${sortArrow('tag')}</th>
-            <th style="cursor:pointer;user-select:none;" onclick="sortColumn('purchased')">累積購買堂數 ${sortArrow('purchased')}</th>
-            <th style="cursor:pointer;user-select:none;" onclick="sortColumn('booked')">累積預約堂數 ${sortArrow('booked')}</th>
-            <th style="cursor:pointer;user-select:none;" onclick="sortColumn('expired')">累積已過期堂數 ${sortArrow('expired')}</th>
-            <th style="cursor:pointer;user-select:none;" onclick="sortColumn('credits')">剩餘可用堂數 ${sortArrow('credits')}</th>
+            <th style="cursor:pointer;user-select:none;white-space:nowrap;font-size:12px;padding:6px 4px;" onclick="sortColumn('purchased')">購買 ${sortArrow('purchased')}</th>
+            <th style="cursor:pointer;user-select:none;white-space:nowrap;font-size:12px;padding:6px 4px;" onclick="sortColumn('booked')">預約 ${sortArrow('booked')}</th>
+            <th style="cursor:pointer;user-select:none;white-space:nowrap;font-size:12px;padding:6px 4px;" onclick="sortColumn('expired')">過期 ${sortArrow('expired')}</th>
+            <th style="cursor:pointer;user-select:none;white-space:nowrap;font-size:12px;padding:6px 4px;" onclick="sortColumn('credits')">可用 ${sortArrow('credits')}</th>
             <th></th>
           </tr></thead>
           <tbody>${rows || '<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:20px;">找不到符合的學員</td></tr>'}</tbody></table>
