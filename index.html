@@ -1978,6 +1978,33 @@ async function removeAvailableTag(tag){
   showToast('已刪除標籤');
 }
 
+async function renameAvailableTag(oldTag){
+  const newTag = prompt('請輸入新的標籤名稱：', oldTag);
+  if(!newTag || newTag.trim()==='' || newTag.trim()===oldTag) return;
+  const trimmed = newTag.trim();
+  const tags = data.store.available_tags || [];
+  if(tags.includes(trimmed)){ showToast('這個標籤名稱已經存在了'); return; }
+  const newTags = tags.map(t=>t===oldTag ? trimmed : t);
+  const { error } = await db.from('store_settings').update({ available_tags:newTags }).eq('id', 1);
+  if(error){ showToast('修改失敗'); console.error(error); return; }
+  data.store.available_tags = newTags;
+  const colorMap = data.store.tag_colors || {};
+  if(colorMap[oldTag] !== undefined){
+    colorMap[trimmed] = colorMap[oldTag];
+    delete colorMap[oldTag];
+    await db.from('store_settings').update({ tag_colors: colorMap }).eq('id', 1);
+    data.store.tag_colors = colorMap;
+  }
+  const affectedMembers = data.members.filter(m=>(m.tags||[]).includes(oldTag));
+  await Promise.all(affectedMembers.map(m=>{
+    const updatedTags = (m.tags||[]).map(t=>t===oldTag ? trimmed : t);
+    m.tags = updatedTags;
+    return db.from('members').update({ tags: updatedTags }).eq('line_user_id', m.line_user_id);
+  }));
+  render();
+  showToast(`標籤已改為「${trimmed}」`);
+}
+
 /* ---- 批次操作共用的選取狀態（學員列表打勾） ---- */
 let selectedMemberIds = new Set();
 
@@ -2147,6 +2174,7 @@ function pageMembers(){
               <div style="display:flex;align-items:center;gap:8px;">
                 <span class="tag-manage-item">
                   <span class="tag-chip" style="cursor:pointer;${tagColorStyle(t)}" onclick="toggleColorPicker('${t}')">${t}</span>
+                  <span class="tag-remove-x" onclick="renameAvailableTag('${t}')" title="修改標籤名稱" style="cursor:pointer;">✎</span>
                   <span class="tag-remove-x" onclick="removeAvailableTag('${t}')" title="刪除標籤">✕</span>
                 </span>
               </div>
@@ -2178,18 +2206,9 @@ function pageMembers(){
 
       <div class="action-card">
         <h3>批次選課</h3>
-        <div class="desc">套用到已選擇的 <b>${selectedMemberIds.size}</b> 位學員。</div>
-        <div class="action-field">
-          <label>上課日期（可多選，僅固定課程需要）</label>
-          <div id="bbDatesContainer">
-            <div class="date-row-full">
-              <input type="date" class="bbDateInput">
-              <button type="button" class="btn btn-ghost btn-sm" onclick="removeBbDateRow(this)" style="flex-shrink:0;">✕</button>
-            </div>
-          </div>
-          <button type="button" class="action-btn-secondary-full" onclick="addBbDateRow()" style="margin-top:6px;margin-bottom:0;">＋ 新增一個日期</button>
-        </div>
-        <div class="action-field"><label>課程</label><select id="bbClass">${getClassOptionsHtml() || '<option value="">尚無課程可選</option>'}</select></div>
+        <div class="desc">套用到已選擇的 <b>${selectedMemberIds.size}</b> 位學員。先選課程，再勾選要預約的日期。</div>
+        <div class="action-field"><label>課程</label><select id="bbClass" onchange="onBbClassChange()">${'<option value="">請選擇課程</option>' + (getClassOptionsHtml() || '')}</select></div>
+        <div id="bbDatesContainer"></div>
         <button class="action-btn-full primary" onclick="submitBatchBooking()">＋ 新增這些預約</button>
       </div>
     </div>
@@ -2505,19 +2524,42 @@ function getClassOptionsHtml(){
   return templateOptions + extraOptions;
 }
 
-function addBbDateRow(){
+function onBbClassChange(){
   const container = document.getElementById('bbDatesContainer');
-  const row = document.createElement('div');
-  row.className = 'date-row-full';
-  row.innerHTML = `<input type="date" class="bbDateInput">
-    <button type="button" class="btn btn-ghost btn-sm" onclick="removeBbDateRow(this)" style="flex-shrink:0;">✕</button>`;
-  container.appendChild(row);
+  const selected = document.getElementById('bbClass').value;
+  if(!selected){ container.innerHTML = ''; return; }
+  const [type, id] = selected.split(':');
+  if(type==='e'){
+    const override = dayOverrides.find(o=>o.id===id && o.type==='extra');
+    if(!override){ container.innerHTML = ''; return; }
+    container.innerHTML = `<div style="padding:8px 0;"><label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;"><input type="checkbox" class="bbDateCheck" value="${override.date}" checked style="width:16px;height:16px;"> ${dateKeyToLabel(override.date)} ${override.time}</label></div>`;
+    return;
+  }
+  const tmpl = data.classes.find(c=>c.id===id);
+  if(!tmpl){ container.innerHTML = ''; return; }
+  const weekdays = tmpl.weekdays || [];
+  const dates = [];
+  const today = new Date(); today.setHours(0,0,0,0);
+  const end = new Date(today); end.setDate(end.getDate()+90);
+  const cancelledSet = new Set(dayOverrides.filter(o=>o.type==='cancel' && o.class_template_id===id).map(o=>o.date));
+  for(let d=new Date(today); d<=end; d.setDate(d.getDate()+1)){
+    const wd = ['日','一','二','三','四','五','六'][d.getDay()];
+    if(!weekdays.includes(wd)) continue;
+    const iso = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    if(cancelledSet.has(iso)) continue;
+    dates.push(iso);
+  }
+  if(dates.length===0){ container.innerHTML = '<div style="padding:8px 0;color:var(--muted);font-size:13px;">未來 90 天內沒有符合的上課日期</div>'; return; }
+  container.innerHTML = `
+    <div style="padding:8px 0 4px;">
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:6px;"><input type="checkbox" id="bbSelectAll" onchange="toggleBbSelectAll(this.checked)" checked style="width:16px;height:16px;"> 全選／取消全選</label>
+      <div style="max-height:200px;overflow-y:auto;border:1px solid var(--line);border-radius:8px;padding:6px 10px;">
+        ${dates.map(iso=>`<label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;padding:3px 0;"><input type="checkbox" class="bbDateCheck" value="${iso}" checked style="width:16px;height:16px;"> ${dateKeyToLabel(iso)}</label>`).join('')}
+      </div>
+    </div>`;
 }
-function removeBbDateRow(btn){
-  const container = document.getElementById('bbDatesContainer');
-  const row = btn.closest('.date-row-full');
-  if(container.children.length<=1){ row.querySelector('input').value=''; return; }
-  row.remove();
+function toggleBbSelectAll(checked){
+  document.querySelectorAll('.bbDateCheck').forEach(cb=>{ cb.checked = checked; });
 }
 
 async function submitBatchBooking(){
@@ -2526,6 +2568,8 @@ async function submitBatchBooking(){
   const selected = document.getElementById('bbClass').value;
   if(!selected){ showToast('請選擇課程'); return; }
   const [type, id] = selected.split(':');
+  const checkedDates = [...document.querySelectorAll('.bbDateCheck:checked')].map(cb=>cb.value);
+  if(checkedDates.length===0){ showToast('請至少勾選一個日期'); return; }
 
   let successCount = 0;
   const skipped = [];
@@ -2533,19 +2577,12 @@ async function submitBatchBooking(){
   if(type==='t'){
     const tmpl = data.classes.find(c=>c.id===id);
     if(!tmpl){ showToast('找不到課程範本'); return; }
-    const dateValues = [...document.querySelectorAll('.bbDateInput')].map(i=>i.value).filter(Boolean);
-    const uniqueDates = [...new Set(dateValues)];
-    if(uniqueDates.length===0){ showToast('請至少選擇一個日期'); return; }
 
-    const capacityEntries = uniqueDates
-      .filter(dateVal => (tmpl.weekdays||[]).includes(weekdayLabelOf(dateVal)))
-      .map(dateVal => ({ classKey:`${isoToDateKey(dateVal)}_${tmpl.id}`, label:`${dateVal} ${tmpl.title}`, cap:tmpl.cap, addCount:memberIds.length }));
+    const capacityEntries = checkedDates.map(dateVal => ({ classKey:`${isoToDateKey(dateVal)}_${tmpl.id}`, label:`${dateVal} ${tmpl.title}`, cap:tmpl.cap, addCount:memberIds.length }));
     if(!(await checkCapacityBeforeBooking(capacityEntries))) return;
 
     for(const lineUserId of memberIds){
-      for(const dateVal of uniqueDates){
-        const wd = weekdayLabelOf(dateVal);
-        if(!(tmpl.weekdays||[]).includes(wd)){ skipped.push(`${memberName(lineUserId)} ${dateVal}`); continue; }
+      for(const dateVal of checkedDates){
         const dateKey = isoToDateKey(dateVal);
         const ok = await insertOneBooking(lineUserId, {
           classKey: `${dateKey}_${tmpl.id}`, classTemplateId: tmpl.id, title: tmpl.title,
