@@ -162,14 +162,16 @@
   .tag-chip .x{cursor:pointer;font-weight:700;opacity:.7;}
   .tag-chip .x:hover{opacity:1;}
   .tag-manage-list{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;}
-  .tag-manage-item{position:relative;display:inline-block;}
-  .tag-manage-item .tag-remove-x{
-    position:absolute;top:-6px;right:-6px;width:18px;height:18px;border-radius:50%;
-    background:var(--danger);color:#fff;font-size:10px;line-height:1;
+  .tag-manage-item{display:inline-flex;align-items:center;gap:6px;}
+  .tag-manage-item .tag-action-btn{
+    width:22px;height:22px;border-radius:50%;
+    font-size:11px;line-height:1;
     display:flex;align-items:center;justify-content:center;cursor:pointer;
-    opacity:0;pointer-events:none;transition:opacity .15s ease;box-shadow:0 1px 3px rgba(0,0,0,.25);
+    opacity:0;pointer-events:none;transition:opacity .15s ease;border:none;
   }
-  .tag-manage-item:hover .tag-remove-x{opacity:1;pointer-events:auto;}
+  .tag-manage-item .tag-action-btn.rename{background:var(--sage);color:var(--sage-dark);}
+  .tag-manage-item .tag-action-btn.delete{background:var(--danger);color:#fff;box-shadow:0 1px 3px rgba(0,0,0,.25);}
+  .tag-manage-item:hover .tag-action-btn{opacity:1;pointer-events:auto;}
   .date-row-full{display:flex;gap:8px;margin-bottom:8px;}
   .date-row-full input{flex:1;min-width:0;}
 
@@ -2174,8 +2176,8 @@ function pageMembers(){
               <div style="display:flex;align-items:center;gap:8px;">
                 <span class="tag-manage-item">
                   <span class="tag-chip" style="cursor:pointer;${tagColorStyle(t)}" onclick="toggleColorPicker('${t}')">${t}</span>
-                  <span class="tag-remove-x" onclick="renameAvailableTag('${t}')" title="修改標籤名稱" style="cursor:pointer;">✎</span>
-                  <span class="tag-remove-x" onclick="removeAvailableTag('${t}')" title="刪除標籤">✕</span>
+                  <span class="tag-action-btn rename" onclick="renameAvailableTag('${t}')" title="修改標籤名稱">✎</span>
+                  <span class="tag-action-btn delete" onclick="removeAvailableTag('${t}')" title="刪除標籤">✕</span>
                 </span>
               </div>
               ${isOpen ? `
