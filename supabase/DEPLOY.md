@@ -19,6 +19,8 @@
 - 第 5 段列出的 Auth 帳號：第 2 步會全部登記為管理員。不認識的帳號請先刪除，並到 Authentication → Providers → Email 關閉「Allow new users to sign up」。
 
 ## 2. 第一階段 migration（純新增，不改任何既有資料或權限）
+
+> 已在正式環境執行過第一階段的話，請再執行 `supabase/migrations/20260929000000_phase1_fix_new_table_grants.sql`（關閉 Supabase 自動開放給匿名的新表權限）。
 執行 `supabase/migrations/20260928000000_phase1_additive.sql`。
 - 舊版前台 / 後台照常運作（已由自動測試驗證：所有既有資料表逐列比對完全相同，見測試 PR）。
 - 若有 NOTICE 提示「未建立唯一索引 / 約束」，代表有舊資料不符合，依第 1 步結果處理後可重跑（可重複執行）。
@@ -31,16 +33,16 @@
    |---|---|
    | `LINE_CHANNEL_ID` | LINE Developers → LIFF 所屬的 LINE Login channel → Channel ID |
    | `APP_JWT_SECRET` | Supabase Settings → API → JWT Secret（**Legacy HS256**；目前專案的 anon key 就是 HS256，可直接使用） |
-   | `ALLOWED_ORIGINS` | `https://yogawithjanet.github.io` |
+   | `ALLOWED_ORIGINS` | `https://yogawithjanet.yogacoursereserve.win,https://yogawithjanet.github.io`（前台網址；有自訂網域一定要列進來，否則學生無法登入） |
 4. LINE Developers → LIFF 設定 → Scope 勾選 **openid**（前台需要 `liff.getIDToken()`）。
 
 > 若日後在 Supabase 把 JWT 改成新式簽章金鑰（JWT Signing Keys / 非對稱），`line-auth` 的簽章方式需要一起調整，否則學員會無法登入。
 
 ### LINE 官方帳號綁定前台網址（GitHub Pages）
-前台網址：`https://yogawithjanet.github.io/yoga-booking/`　LIFF ID：`2010908944-FrI4dOOM`（在 `config.js`）
+前台網址：`https://yogawithjanet.yogacoursereserve.win/`（自訂網域；舊網址 `https://yogawithjanet.github.io/yoga-booking/` 會自動轉過去）　LIFF ID：`2010908944-FrI4dOOM`（在 `config.js`）
 
 1. **LINE Developers Console** → Provider → LINE Login channel（LIFF 所在的 channel）→ **LIFF** 分頁 → 點 `2010908944-FrI4dOOM`：
-   - **Endpoint URL**：`https://yogawithjanet.github.io/yoga-booking/`（結尾要有 `/`，必須是 https）
+   - **Endpoint URL**：`https://yogawithjanet.yogacoursereserve.win/`（結尾要有 `/`，必須是 https；要跟實際網址一致）
    - **Scope**：勾選 `openid`、`profile`
    - **Size**：Full
    - **Bot link feature**：On (Aggressive)，學員第一次打開時會提示加官方帳號好友
@@ -80,3 +82,6 @@ GitHub Pages 網址不變，所以只要 Endpoint URL 設定正確，之後合�
 ```sql
 select cron.schedule('complete-past-bookings', '5 * * * *', $$select public.complete_past_bookings()$$);
 ```
+
+## ⚠️ 修改網站檔案前
+請先從 GitHub 取得最新的 `main` 再修改 `index.html`。在舊的檔案上修改後上傳，會把整個檔案蓋回舊版（2026-09-29 曾因此讓新版消失）。
