@@ -1,0 +1,15 @@
+{
+  "name": "yoga-booking-tests",
+  "private": true,
+  "description": "前台 / 後台 / 資料庫 行為測試：在記憶體 Postgres（PGlite）上套用正式 migration 後執行真實程式碼，不會連線任何正式環境",
+  "scripts": {
+    "test": "node --test",
+    "test:db": "node --test db.test.js migration-safety.test.js",
+    "test:front": "node --test frontend.test.js",
+    "test:admin": "node --test admin.test.js"
+  },
+  "engines": { "node": ">=20" },
+  "dependencies": {
+    "@electric-sql/pglite": "^0.2.17"
+  }
+}
