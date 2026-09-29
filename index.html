@@ -2610,20 +2610,11 @@ function pageMemberDetail(){
       <div class="panel" style="display:flex;flex-direction:column;">
         <div class="panel-head"><h3>幫學員新增預約</h3></div>
         <div class="panel-body">
-          <div class="hint-box">💡 選課程後，可以一次選多個日期（點「＋新增一個日期」增加欄位），系統會逐一檢查每個日期的星期是否有開這堂課；每成功一筆會自動扣 1 堂。選「⭐ 特別課」的話，日期欄位會被忽略，系統自動使用該堂課設定好的日期。</div>
+          <div class="hint-box">💡 先選課程，再勾選要預約的日期；每成功一筆會自動扣 1 堂。選「⭐ 特別課」的話，系統自動使用該堂課設定好的日期。</div>
           <div class="form-grid">
-            <div class="field" style="grid-column:1/-1;">
-              <label>上課日期（可多選，僅固定課程需要）</label>
-              <div id="adNewDatesContainer">
-                <div class="date-row" style="display:flex;gap:6px;margin-bottom:6px;">
-                  <input type="date" class="adDateInput" style="flex:1;border:1px solid var(--line);border-radius:9px;padding:9px 11px;font-size:13px;background:var(--paper);color:var(--ink);">
-                  <button type="button" class="btn btn-ghost btn-sm" onclick="removeDateRow(this)">✕</button>
-                </div>
-              </div>
-              <button type="button" class="btn btn-ghost btn-sm" onclick="addDateRow()">＋ 新增一個日期</button>
-            </div>
-            <div class="field"><label>課程</label><select id="adNewClass">${getClassOptionsHtml() || '<option value="">尚無課程可選</option>'}</select></div>
+            <div class="field" style="grid-column:1/-1;"><label>課程</label><select id="adNewClass" onchange="onAdClassChange()">${'<option value="">請選擇課程</option>' + (getClassOptionsHtml() || '')}</select></div>
           </div>
+          <div id="adDatesContainer"></div>
         </div>
         <div class="add-bar" style="margin-top:auto;"><button class="btn btn-primary" onclick="adminAddBooking('${m.line_user_id}')">＋ 新增這些預約</button></div>
       </div>
@@ -2760,20 +2751,57 @@ function clearMemberPaymentFilter(){
   render();
 }
 
-function addDateRow(){
-  const container = document.getElementById('adNewDatesContainer');
-  const row = document.createElement('div');
-  row.className = 'date-row';
-  row.style.cssText = 'display:flex;gap:6px;margin-bottom:6px;';
-  row.innerHTML = `<input type="date" class="adDateInput" style="flex:1;border:1px solid var(--line);border-radius:9px;padding:9px 11px;font-size:13px;background:var(--paper);color:var(--ink);">
-    <button type="button" class="btn btn-ghost btn-sm" onclick="removeDateRow(this)">✕</button>`;
-  container.appendChild(row);
+function onAdClassChange(){
+  const container = document.getElementById('adDatesContainer');
+  const selected = document.getElementById('adNewClass').value;
+  if(!selected){ container.innerHTML = ''; return; }
+  const [type, id] = selected.split(':');
+  if(type==='e'){
+    const override = dayOverrides.find(o=>o.id===id && o.type==='extra');
+    if(!override){ container.innerHTML = ''; return; }
+    container.innerHTML = `<div style="padding:8px 0;"><label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;"><input type="checkbox" class="adDateCheck" value="${esc(override.date)}" checked style="width:16px;height:16px;"> ${dateKeyToLabel(override.date)} ${esc(override.time)}</label></div>`;
+    return;
+  }
+  const tmpl = data.classes.find(c=>c.id===id);
+  if(!tmpl){ container.innerHTML = ''; return; }
+  const weekdays = tmpl.weekdays || [];
+  const dates = [];
+  const today = new Date(); today.setHours(0,0,0,0);
+  const end = new Date(today); end.setDate(end.getDate()+90);
+  const cancelledSet = new Set(dayOverrides.filter(o=>o.type==='cancel' && o.class_template_id===id).map(o=>o.date));
+  for(let d=new Date(today); d<=end; d.setDate(d.getDate()+1)){
+    const wd = ['日','一','二','三','四','五','六'][d.getDay()];
+    if(!weekdays.includes(wd)) continue;
+    const iso = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    if(cancelledSet.has(iso)) continue;
+    dates.push(iso);
+  }
+  if(dates.length===0){ container.innerHTML = '<div style="padding:8px 0;color:var(--muted);font-size:13px;">未來 90 天內沒有符合的上課日期</div>'; return; }
+  const monthGroups = {};
+  dates.forEach(iso => { const m = iso.slice(0,7); if(!monthGroups[m]) monthGroups[m] = []; monthGroups[m].push(iso); });
+  const monthKeys = Object.keys(monthGroups).sort();
+  const monthBtns = monthKeys.map(m => {
+    const [y,mo] = m.split('-');
+    return `<button type="button" class="btn btn-ghost btn-sm" onclick="toggleAdMonth('${m}')" style="font-size:12px;padding:3px 10px;">${parseInt(mo)}月全選</button>`;
+  }).join(' ');
+  container.innerHTML = `
+    <div style="padding:8px 0 4px;">
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:6px;"><input type="checkbox" id="adSelectAll" onchange="toggleAdSelectAll(this.checked)" checked style="width:16px;height:16px;"> 全選／取消全選</label>
+      <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px;">${monthBtns}</div>
+      <div style="max-height:200px;overflow-y:auto;border:1px solid var(--line);border-radius:8px;padding:6px 10px;">
+        ${dates.map(iso=>`<label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;padding:3px 0;"><input type="checkbox" class="adDateCheck" value="${iso}" checked style="width:16px;height:16px;"> ${dateKeyToLabel(iso)}</label>`).join('')}
+      </div>
+    </div>`;
 }
-function removeDateRow(btn){
-  const container = document.getElementById('adNewDatesContainer');
-  const row = btn.closest('.date-row');
-  if(container.children.length<=1){ row.querySelector('input').value=''; return; } // 至少留一列，清空就好
-  row.remove();
+function toggleAdSelectAll(checked){
+  document.querySelectorAll('.adDateCheck').forEach(cb=>{ cb.checked = checked; });
+}
+function toggleAdMonth(month){
+  const cbs = [...document.querySelectorAll('.adDateCheck')].filter(cb=>cb.value.startsWith(month));
+  const allChecked = cbs.every(cb=>cb.checked);
+  cbs.forEach(cb=>{ cb.checked = !allChecked; });
+  const allCbs = [...document.querySelectorAll('.adDateCheck')];
+  document.getElementById('adSelectAll').checked = allCbs.every(cb=>cb.checked);
 }
 
 async function getClassKeyBookedCount(classKey){
@@ -2823,15 +2851,12 @@ async function adminBookFlow(memberIds, type, id, dates){
 }
 
 async function adminAddBooking(lineUserId){
-  const selected = document.getElementById('adNewClass').value; // 't:xxx' 或 'e:xxx'
+  const selected = document.getElementById('adNewClass').value;
   if(!selected){ showToast('請選擇課程'); return; }
   const [type, id] = selected.split(':');
-  let dates = [];
-  if(type==='t'){
-    dates = [...new Set([...document.querySelectorAll('.adDateInput')].map(i=>i.value).filter(Boolean))];
-    if(dates.length===0){ showToast('請至少選擇一個日期'); return; }
-  }
-  await adminBookFlow([lineUserId], type, id, dates);
+  const checkedDates = [...document.querySelectorAll('.adDateCheck:checked')].map(cb=>cb.value);
+  if(checkedDates.length===0){ showToast('請至少勾選一個日期'); return; }
+  await adminBookFlow([lineUserId], type, id, checkedDates);
   await openMemberDetail(lineUserId);
 }
 
