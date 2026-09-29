@@ -677,7 +677,9 @@ create or replace function public.complete_past_bookings() returns int
 language plpgsql security definer set search_path = public, pg_temp as $$
 declare n int;
 begin
-  if not app.is_admin() and current_user not in ('postgres','service_role') then raise exception '需要管理員權限' using errcode = '42501'; end if;
+  -- 透過 API 呼叫時（有 JWT）必須是管理員；直接在資料庫執行（SQL Editor、pg_cron，沒有 JWT）則允許。
+  -- 注意：security definer 函式內的 current_user 是函式擁有者，不能拿來判斷呼叫者。
+  if coalesce(auth.jwt()->>'role', '') <> '' and not app.is_admin() then raise exception '需要管理員權限' using errcode = '42501'; end if;
   -- 只處理格式正確的日期 / 時間；格式不對的舊資料跳過（不讓整個函式失敗），可用 preflight 第 8 段找出來
   update public.bookings set status = 'completed'
    where status = 'active'
@@ -727,6 +729,20 @@ begin
   end loop;
 end $$;
 grant execute on function public.get_store_public_settings(), public.get_booking_rules(), public.get_class_seat_counts() to anon, authenticated;
+
+-- Supabase 會自動把 public schema 的新表開放給 anon / authenticated，這裡立即收回（詳見 20260929000000_phase1_fix_new_table_grants.sql）
+revoke all on public.admin_users, public.credit_ledger, public.audit_log, public.member_credit_summary from anon;
+revoke insert, update, delete, truncate on public.admin_users, public.credit_ledger, public.audit_log from authenticated;
+alter table public.admin_users   enable row level security;
+alter table public.credit_ledger enable row level security;
+alter table public.audit_log     enable row level security;
+grant select on public.admin_users, public.credit_ledger, public.audit_log to authenticated;
+drop policy if exists admin_read on public.admin_users;
+drop policy if exists admin_read on public.credit_ledger;
+drop policy if exists admin_read on public.audit_log;
+create policy admin_read on public.admin_users   for select to authenticated using (app.is_admin());
+create policy admin_read on public.credit_ledger for select to authenticated using (app.is_admin());
+create policy admin_read on public.audit_log     for select to authenticated using (app.is_admin());
 
 -- 公開圖片改放 Storage（公告 / 關於我們），只有管理員能上傳（S7）
 insert into storage.buckets(id, name, public) values ('public-assets', 'public-assets', true) on conflict (id) do nothing;
